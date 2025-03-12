@@ -1,5 +1,5 @@
 # hifisampler
-A new UTAU resampler based on [pc-nsf-hifigan](https://github.com/openvpi/vocoders).
+A new UTAU resampler based on [pc-nsf-hifigan](https://github.com/openvpi/vocoders) for virtual singer.
 ## Why is it called hifisampler?
 Hifisampler was modified from [straycatresampler](https://github.com/UtaUtaUtau/straycat), replacing the original WORLD with pc-nsf-hifigan.
 ## What makes pc-nsf-hifigan different from traditional vocoders?
