@@ -61,6 +61,7 @@ class Config:
     vocoder_path: str = r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt"
     model_type: str = 'ckpt' # or 'onnx'
     wave_norm: bool = True
+    loop_mode: bool = False
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def dynamic_range_compression_torch(x, C=1, clip_val=1e-9):
@@ -530,13 +531,31 @@ class Resampler:
         logging.info(f'con:{con}')
 
         logging.info('Preparing interpolators.')
-        # Make interpolators to render new areas
-        mel_interp = interp.interp1d(t_area_origin, mel_origin, axis=1)
 
         length_req = self.length / 1000
         stretch_length = end - con
         logging.info(f'length_req: {length_req}')
         logging.info(f'stretch_length: {stretch_length}')
+
+        if Config.loop_mode:
+            # 添加循环拼接模式
+            logging.info('Looping.')
+            logging.info(f'con_mel_frame: {int((con + thop_origin/2)//thop_origin)}')
+            mel_loop = mel_origin[:, int((con + thop_origin/2)//thop_origin):int((end + thop_origin/2)//thop_origin)]
+            logging.info(f'mel_loop: {mel_loop.shape}')
+            pad_loop_size = length_req//thop_origin + 1
+            logging.info(f'pad_loop_size: {pad_loop_size}')
+            padded_mel = np.pad(mel_loop, pad_width=((0,0),(0, int(pad_loop_size))), mode='reflect') #多pad一点
+            logging.info(f'padded_mel: {padded_mel.shape}')
+            mel_origin = np.concatenate((mel_origin[:,:int((con + thop_origin/2)//thop_origin)], padded_mel), axis=1)
+            logging.info(f'mel_origin: {mel_origin.shape}')
+            stretch_length = pad_loop_size*thop_origin
+            t_area_origin = np.arange(mel_origin.shape[1]) * thop_origin + thop_origin / 2
+            total_time = t_area_origin[-1] + thop_origin/2
+            logging.info(f'new_total_time: {total_time}')
+
+        # Make interpolators to render new areas
+        mel_interp = interp.interp1d(t_area_origin, mel_origin, axis=1)
 
         if stretch_length < length_req:
             logging.info('stretch_length < length_req')
@@ -570,6 +589,10 @@ class Resampler:
             cut_right_mel_frames = 0
         logging.info(f'end_right_mel_frames: {end_right_mel_frames}')
         logging.info(f'cut_right_mel_frames: {cut_right_mel_frames}')
+
+        logging.info(f'length_req: {length_req}')
+        logging.info(f'stretch_length: {stretch_length}')
+        logging.info(f'(length_req+con*vel + thop/2)//thop: {(length_req+con*vel + thop/2)//thop}')
 
         stretched_t_mel = stretched_t_mel[int(cut_left_mel_frames):int(stretched_n_frames-cut_right_mel_frames)]
         logging.info(f'stretched_t_mel: {stretched_t_mel.shape}')
