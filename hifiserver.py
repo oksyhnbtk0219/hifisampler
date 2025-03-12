@@ -667,10 +667,9 @@ class Resampler:
             render = loudness_norm(render, Config.sample_rate, peak = -1, loudness=-14.0, block_size=0.100)
         else:
             render = render / scale
-            new_max = np.max(np.abs(render))
-            if new_max > 1:
-                render = render / new_max
-
+        new_max = np.max(np.abs(render))
+        if new_max > 1:
+            render = render / new_max
         save_wav(self.out_file, render)
 
 def split_arguments(input_string):
