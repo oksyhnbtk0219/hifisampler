@@ -10,7 +10,7 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
 pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 ```
 2. Download the CUDA version of PyTorch from the Torch website (If you're certain about only using the ONNX version, then downloading the CPU version of PyTorch is fine).
-3. Download the [release](https://github.com/openhachimi/hifisampler/releases, unzip it, and run 'hifiserver.py'.
+3. Download the [release](https://github.com/openhachimi/hifisampler/releases), unzip it, and run 'hifiserver.py'.
 4. Set UTAU's resampler to `hifisampler.exe`.
 # Acknowledgments:
 - [yjzxkxdn](https://github.com/yjzxkxdn)
