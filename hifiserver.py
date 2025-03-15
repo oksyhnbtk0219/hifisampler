@@ -39,7 +39,7 @@ optional arguments:
 
 notes = {'C' : 0, 'C#' : 1, 'D' : 2, 'D#' : 3, 'E' : 4, 'F' : 5, 'F#' : 6, 'G' : 7, 'G#' : 8, 'A' : 9, 'A#' : 10, 'B' : 11} # Note names lol
 note_re = re.compile(r'([A-G]#?)(-?\d+)') # Note Regex for conversion
-cache_ext = '.hjm.npz' # cache file extension
+cache_ext = '.hifi.npz' # cache file extension
 
 # Flags
 flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't', 'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z']
@@ -325,13 +325,13 @@ class Resampler:
         The rendering workflow. Immediately starts when class is initialized.
 
     get_features(self):
-        Gets the WORLD features either from a cached file or generating it if it doesn't exist.
+        Gets the MEL features either from a cached file or generating it if it doesn't exist.
 
     generate_features(self, features_path):
-        Generates WORLD features and saves it for later.
+        Generates MEL features and saves it for later.
 
     resample(self, features):
-        Renders a WAV file using the passed WORLD features.
+        Renders a WAV file using the passed MEL features.
     """
     def __init__(self, in_file, out_file, pitch, velocity, flags='', offset=0, length=1000, consonant=0, cutoff=0, volume=100, modulation=0, tempo='!100', pitch_string='AA'):
         """Initializes the renderer and immediately starts it.
@@ -404,7 +404,7 @@ class Resampler:
         self.resample(features)
 
     def get_features(self):
-        """Gets the WORLD features either from a cached file or generating it if it doesn't exist.
+        """Gets the MEL features either from a cached file or generating it if it doesn't exist.
 
         Parameters
         ----------
@@ -413,7 +413,7 @@ class Resampler:
         Returns
         -------
         features : dict
-            A dictionary of the F0, MGC, BAP, and average F0.
+            A dictionary of the MEL.
         """
         # Setup cache path file
         fname = self.in_file.name
@@ -464,8 +464,6 @@ class Resampler:
             0, 1).squeeze()
         logging.info(f'mel_origin: {mel_origin.shape}')
         mel_origin = dynamic_range_compression_torch(mel_origin).cpu().numpy()
-
-    
         logging.info('Saving features.')
         
         features = {'mel_origin' : mel_origin, 'scale' : scale}
