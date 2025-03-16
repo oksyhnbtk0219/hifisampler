@@ -1,7 +1,7 @@
 # hifisampler
 A new UTAU resampler based on [pc-nsf-hifigan](https://github.com/openvpi/vocoders) for virtual singer.
+### For Jinriki please use our [Hachimisampler](https://github.com/openhachimi/hachimisampler)
 ## Why is it called hifisampler?
-For Jinriki please use our [Hachimisampler](https://github.com/openhachimi/hachimisampler)
 Hifisampler was modified from [straycatresampler](https://github.com/UtaUtaUtau/straycat), replacing the original WORLD with pc-nsf-hifigan.
 ## What makes pc-nsf-hifigan different from traditional vocoders?
 Pc-nsf-hifigan employs neural networks to upsample the input features, offering clearer audio quality than traditional vocoders. It is an improvement over the traditional nsf-hifigan, supporting f0 inputs that do not match mel, making it suitable for UTAU resampling.
