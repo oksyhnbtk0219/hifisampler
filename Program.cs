@@ -12,7 +12,7 @@ class Program
 {
     static readonly HttpClient client = new HttpClient();
     static readonly int targetPort = 8572;
-    static readonly string launcherScriptName = "launch_server.py"; // 启动服务器的 Python 脚本
+    static readonly string launcherScriptName = "launch_server.py"; // Start Python script that starts the server
 
     static async Task Main(string[] args)
     {
@@ -25,13 +25,13 @@ class Program
         }
         Console.WriteLine($"[Main] Arguments received: {string.Join(" ", args)}");
 
-        // 1. 检测端口
+        // Trying to dectect the port
         Console.WriteLine($"[Main] Checking if port {targetPort} is in use...");
         if (!IsPortInUse(targetPort))
         {
             Console.WriteLine($"[Main] Port {targetPort} is not in use. Attempting to launch server.");
 
-            // 2. 获取启动脚本路径
+            // Get the path for launching the launch_server.py script
             string exeDirectory = AppContext.BaseDirectory;
             string launcherScriptPath = Path.Combine(exeDirectory, launcherScriptName);
             Console.WriteLine($"[Main] {launcherScriptName} path: {launcherScriptPath}");
@@ -42,18 +42,40 @@ class Program
                 Environment.Exit(1);
             }
 
-            // 3. 启动服务器启动脚本 (保留窗口)
+            // Start the script with keep windows open
             try
             {
                 LaunchServerLauncher(launcherScriptPath);
-                Console.WriteLine("[Main] Waiting 10 seconds for the server to start...");
-                Thread.Sleep(15000);
+                Console.WriteLine("[Main] Waiting for the server to start...");
+                bool serverStarted = false;
+                for (int i = 0; i < 15; i++) // 
+                {
+                    if (IsPortInUse(targetPort))
+                    {
+                        Console.WriteLine($"[Main] Server started on port {targetPort} after {i+1} seconds.");
+                        serverStarted = true;
+                        Thread.Sleep(2000); // Wait for 2 seconds before proceeding for server to fully start
+                        break;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Main] Server not yet started. Checking again in 1 second...");
+                        Thread.Sleep(1000);
+                    }
+                }
+            
+                if (!serverStarted)
+                {
+                    Console.Error.WriteLine("[Main] Error: Server did not start within 15 seconds.");
+                    Environment.Exit(1);
+                }
             }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"[Main] Error launching server: {ex.Message}");
                 Environment.Exit(1);
             }
+            
         }
 
         // 4. 与服务器通信

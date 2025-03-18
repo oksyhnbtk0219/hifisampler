@@ -8,25 +8,24 @@
     "net6.0": []
   },
   "packageFolders": {
-    "C:\\Users\\ztl\\.nuget\\packages\\": {}
+    "/home/NBTK/.nuget/packages/": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "E:\\hifisampe\\hachimisampler\\StrayCatRunner.csproj",
+      "projectUniqueName": "/home/NBTK/Git/hifisampler/StrayCatRunner.csproj",
       "projectName": "StrayCatRunner",
-      "projectPath": "E:\\hifisampe\\hachimisampler\\StrayCatRunner.csproj",
-      "packagesPath": "C:\\Users\\ztl\\.nuget\\packages\\",
-      "outputPath": "E:\\hifisampe\\hachimisampler\\obj\\",
+      "projectPath": "/home/NBTK/Git/hifisampler/StrayCatRunner.csproj",
+      "packagesPath": "/home/NBTK/.nuget/packages/",
+      "outputPath": "/home/NBTK/Git/hifisampler/obj/",
       "projectStyle": "PackageReference",
       "configFilePaths": [
-        "C:\\Users\\ztl\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        "/home/NBTK/.nuget/NuGet/NuGet.Config"
       ],
       "originalTargetFrameworks": [
         "net6.0"
       ],
       "sources": {
-        "D:\\Downloads\\vcpkg-master\\scripts\\buildsystems": {},
         "https://api.nuget.org/v3/index.json": {}
       },
       "frameworks": {
@@ -39,7 +38,13 @@
         "warnAsError": [
           "NU1605"
         ]
-      }
+      },
+      "restoreAuditProperties": {
+        "enableAudit": "true",
+        "auditLevel": "low",
+        "auditMode": "direct"
+      },
+      "SdkAnalysisLevel": "9.0.100"
     },
     "frameworks": {
       "net6.0": {
@@ -55,12 +60,26 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
+        "downloadDependencies": [
+          {
+            "name": "Microsoft.AspNetCore.App.Ref",
+            "version": "[6.0.36, 6.0.36]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Host.linux-x64",
+            "version": "[6.0.36, 6.0.36]"
+          },
+          {
+            "name": "Microsoft.NETCore.App.Ref",
+            "version": "[6.0.36, 6.0.36]"
+          }
+        ],
         "frameworkReferences": {
           "Microsoft.NETCore.App": {
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\6.0.403\\RuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/9.0.104/RuntimeIdentifierGraph.json"
       }
     }
   }

@@ -1,8 +1,12 @@
 {
   "version": 2,
-  "dgSpecHash": "P1zORH2d6NG2jgfakDb80JicNenP6Kr9XeAMC83oIfi9u7pmqIlkx/3P6Hi6qR2IotYpREWGdCzp1jb8BGjOhQ==",
+  "dgSpecHash": "849D0bsR1Gk=",
   "success": true,
-  "projectFilePath": "E:\\hifisampe\\hachimisampler\\StrayCatRunner.csproj",
-  "expectedPackageFiles": [],
+  "projectFilePath": "/home/NBTK/Git/hifisampler/StrayCatRunner.csproj",
+  "expectedPackageFiles": [
+    "/home/NBTK/.nuget/packages/microsoft.netcore.app.ref/6.0.36/microsoft.netcore.app.ref.6.0.36.nupkg.sha512",
+    "/home/NBTK/.nuget/packages/microsoft.aspnetcore.app.ref/6.0.36/microsoft.aspnetcore.app.ref.6.0.36.nupkg.sha512",
+    "/home/NBTK/.nuget/packages/microsoft.netcore.app.host.linux-x64/6.0.36/microsoft.netcore.app.host.linux-x64.6.0.36.nupkg.sha512"
+  ],
   "logs": []
 }
