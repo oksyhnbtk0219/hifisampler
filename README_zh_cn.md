@@ -9,11 +9,11 @@ pc-nsf-hifigan是传统nsf-hifigan的改进，支持输入与mel不匹配的f0�
 0.下载 [release](https://github.com/mtfotto/hifimisampler/releases) 解压，进入文件夹，如果有嵌套的话继续打开直到显示有hifiserver.py文件。         
 1.安装miniconda，安装好后在刚刚打开的文件夹右击，点在终端中打开，输入      
 ```
-conda create -n hifisamper python=3.8 -y
+conda create -n hifisampler python=3.8 -y
 ```
 创建完成后，输入     
 ```
-conda activate hifisamper
+conda activate hifisampler
 ```
 即可进入虚拟环境。  虚拟环境只需创建一次，以后直接进入有hifiserver.py的文件夹打开终端输入activate命令即可      
 进入成功后会发现终端工作目录前面有(hifisamper)标志      

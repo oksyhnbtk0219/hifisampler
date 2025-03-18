@@ -1,0 +1,5 @@
+# Replace these paths with corresponding path on your computer
+# Always use \\ instead of \ on Windows
+conda_base_path = "put_path_here\\Miniconda"
+conda_env_name = "put_conda_environment_name_here"
+python_script_path = "put_path_here\\hifiserver.py"
