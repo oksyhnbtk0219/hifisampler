@@ -16,8 +16,6 @@ class Program
 
     static async Task Main(string[] args)
     {
-        Console.WriteLine("[Main] Program started.");
-
         if (args.Length < 1)
         {
             Console.Error.WriteLine("[Main] No arguments provided.");
@@ -48,25 +46,23 @@ class Program
                 LaunchServerLauncher(launcherScriptPath);
                 Console.WriteLine("[Main] Waiting for the server to start...");
                 bool serverStarted = false;
-                for (int i = 0; i < 15; i++) // 
+                for (int i = 0; i < 30; i++) // 
                 {
                     if (IsPortInUse(targetPort))
                     {
                         Console.WriteLine($"[Main] Server started on port {targetPort} after {i+1} seconds.");
                         serverStarted = true;
-                        Thread.Sleep(2000); // Wait for 2 seconds before proceeding for server to fully start
                         break;
                     }
                     else
                     {
-                        Console.WriteLine($"[Main] Server not yet started. Checking again in 1 second...");
                         Thread.Sleep(1000);
                     }
                 }
             
                 if (!serverStarted)
                 {
-                    Console.Error.WriteLine("[Main] Error: Server did not start within 15 seconds.");
+                    Console.Error.WriteLine("[Main] Error: Server did not start within 20 seconds.");
                     Environment.Exit(1);
                 }
             }
@@ -78,7 +74,7 @@ class Program
             
         }
 
-        // 4. 与服务器通信
+        // Communicate with server (From Straycat original code)
         try
         {
             var postFields = string.Join(" ", args);
@@ -111,8 +107,7 @@ class Program
 
     static bool IsPortInUse(int port)
     {
-        // 定义检测端口
-        Console.WriteLine($"[IsPortInUse] Checking if port {port} is in use...");
+        // Define port dectecting method
         try
         {
             using (var client = new TcpClient())
@@ -138,31 +133,32 @@ class Program
         }
     }
 
-    // 定义服务器启动器启动器
+    // Define server launcher launching method
     static void LaunchServerLauncher(string launcherScriptPath)
     {
         Console.WriteLine($"[LaunchServerLauncher] Attempting to launch server launcher.");
 
-        // 初始化 command 和 arguments
+        // Initialize command and arguments based on operating system
         string command = "";
         string arguments = "";
 
         if (OperatingSystem.IsWindows())
         {
-            // 使用 cmd /K 来启动一个新的 CMD 窗口并保持打开状态
+            // Open a command prompt with /K option to keep windows open
             command = "cmd";
             arguments = $"/K python \"{launcherScriptPath}\"";
         }
         else if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
         {
-            // 尝试几种常见的终端（可以根据需要添加更多）
+            // Try some other mainstream terminals (Can add more base on need)
             string[] terminals = { "gnome-terminal", "konsole", "xterm", "terminator", "xfce4-terminal" };
-            bool terminalFound = false; // 添加一个标志位，用于记录是否找到可用的终端
+            bool terminalFound = false; // Use this flag to track if a suitable terminal is found
+
             foreach (var terminal in terminals)
             {
                 try
                 {
-                    // 检查终端是否存在
+                    // Check if the terminal is available
                     Process.Start(new ProcessStartInfo { FileName = terminal, Arguments = "--version", RedirectStandardOutput = true, UseShellExecute = false }).WaitForExit();
                    
                     command = terminal;
@@ -176,12 +172,12 @@ class Program
                         arguments = $"-e bash -c \"python '{launcherScriptPath}'; exec bash\"";
                     }
                     Console.WriteLine($"[LaunchServerLauncher] Using terminal: {command} {arguments}");
-                    terminalFound = true; // 找到可用的终端，设置标志位
-                    break; // 找到可用的终端，跳出循环
+                    terminalFound = true; // Find a suitable terminal and flip the flag
+                    break; 
                 }
                 catch (Exception)
                 {
-                    // 如果找不到该终端，继续尝试下一个
+                    // Try next option if can find one
                     continue;
                 }
             }
@@ -201,12 +197,12 @@ class Program
         {
             FileName = command,
             Arguments = arguments,
-            UseShellExecute = true, // 使用 shell 执行 (允许 cmd /K 或终端的 -e 选项)
-            CreateNoWindow = false, // 创建新窗口
+            UseShellExecute = true, // Run with shell
+            CreateNoWindow = false, // Create new window
             WorkingDirectory = Path.GetDirectoryName(launcherScriptPath)
         };
 
-        // 启动进程
+        // Start the process
         try
         {
             Process.Start(startInfo);
@@ -215,7 +211,7 @@ class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[LaunchServerLauncher] Error starting server launcher: {ex}");
-            throw; // 重新抛出异常
+            throw; 
         }
     }
 }
