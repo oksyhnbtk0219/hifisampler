@@ -1,27 +1,20 @@
 import subprocess
 import os
 import sys
-import tomli  # 或 import tomllib 如果Python < 3.11
+import tomli  # Or import tomllib if Python < 3.11
 
 
 def start_in_conda_env(config):
-    """
-    在指定的 Conda 环境中启动一个新的持久化 CMD 窗口，并在其中运行 Python 脚本。
-
-    Args:
-        config: 包含配置信息的字典。
-    """
-
     conda_env_name = config["conda_env_name"]
     python_script_path = config["python_script_path"]
-    conda_base_path = config.get("conda_base_path")  # 使用 get 方法，允许 conda_base_path 为空
+    conda_base_path = config.get("conda_base_path")  # Use get method to allow conda_base_path as empty
 
-    # 1. 确定操作系统和 Conda 激活方式
+    # Choose how to find conda path based on operating system
     if sys.platform == "win32":  # Windows
         if conda_base_path:
             activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
         else:
-            # 尝试从 PATH 中查找 conda
+            # Try to find conda from PATH
             for path in os.environ["PATH"].split(os.pathsep):
                 possible_path = os.path.join(path, "activate.bat")
                 if os.path.exists(possible_path):
@@ -31,7 +24,7 @@ def start_in_conda_env(config):
                 raise FileNotFoundError(
                     "Could not find activate.bat. Please specify conda_base_path in config.toml."
                 )
-        # 使用 cmd /K 来保持窗口打开
+        # Use cmd /K to keep command prompt open
         command = (
             f'cmd /K ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
         )
@@ -40,7 +33,7 @@ def start_in_conda_env(config):
         if conda_base_path:
             conda_bin = os.path.join(conda_base_path, "bin")
         else:
-            # 尝试从PATH中寻找conda
+            # Try to find conda from PATH
             for path in os.environ["PATH"].split(os.pathsep):
                 if os.path.exists(os.path.join(path, "conda")):
                     conda_bin = path
@@ -49,13 +42,13 @@ def start_in_conda_env(config):
                 raise FileNotFoundError(
                     "Could not find conda. Please specify conda_base_path in config.toml."
                 )
-        # 使用conda run
+        # Starts with conda run
         command = f'conda run -n {conda_env_name} python "{python_script_path}"'
 
     else:
         raise NotImplementedError(f"Unsupported platform: {sys.platform}")
 
-    # 2. 启动新的 CMD 窗口或终端
+    # Start command prompt
     try:
         if sys.platform == "win32":
             subprocess.Popen(command, shell=True)
@@ -63,8 +56,8 @@ def start_in_conda_env(config):
             if sys.platform == "darwin":
                 terminal = "osascript"
                 script = f'tell application "Terminal" to do script "{command}"'
-            else:  # linux
-                # 尝试几种常见的终端
+            else:
+                # Try some mainstream terminal
                 terminals = [
                     "gnome-terminal",
                     "konsole",
@@ -75,9 +68,9 @@ def start_in_conda_env(config):
                 for terminal in terminals:
                     try:
                         subprocess.Popen([terminal, "-e", command])
-                        break  # 如果成功打开就跳出循环
+                        break
                     except FileNotFoundError:
-                        pass  # 如果没找到，则继续尝试下一个
+                        pass
                 else:
                     raise FileNotFoundError(
                         "Could not find a suitable terminal. Please install gnome-terminal, konsole, xterm, terminator, or xfce4-terminal."
@@ -91,26 +84,26 @@ def start_in_conda_env(config):
 
 
 if __name__ == "__main__":
-    # 读取 TOML 配置文件
-    config_file_path = "config.toml"  # 配置文件路径
+    # Read config.toml
+    config_file_path = "config.toml"  # Set path of the config.toml
     try:
-        with open(config_file_path, "rb") as f:  # 以二进制模式打开
-            config = tomli.load(f)  # 或 tomllib.load(f)
+        with open(config_file_path, "rb") as f:
+            config = tomli.load(f)  # Or tomllib.load(f)
     except FileNotFoundError:
         print(f"Error: Config file not found: {config_file_path}")
         sys.exit(1)
-    except tomli.TOMLDecodeError as e:  # 或 tomllib.TOMLDecodeError
+    except tomli.TOMLDecodeError as e:  # Or tomllib.TOMLDecodeError
         print(f"Error decoding TOML file: {e}")
         sys.exit(1)
 
-    # 检查配置项是否存在
+    # Check wheather the config exist or not
     required_keys = ["conda_env_name", "python_script_path"]
     for key in required_keys:
         if key not in config:
             print(f"Error: Missing required key '{key}' in config.toml")
             sys.exit(1)
 
-    # 调用函数
+    # Call the function
     if start_in_conda_env(config):
         print(
             f"Successfully started '{config['python_script_path']}' in Conda environment '{config['conda_env_name']}'."
