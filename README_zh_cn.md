@@ -11,8 +11,9 @@ pc-nsf-hifigan是传统nsf-hifigan的改进，支持输入与mel不匹配的f0�
 pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 ```
 2. 在torch官网下载cuda版本的pytorch (如果你确定只使用onnx版，那么可以下载cpu版的pytorch)
-3. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 解压后运行 'hifiserver.py'.
-4. 将utau的重采样器设置为 `hifisampler.exe`.
+3. 在config.toml中填入对应路径信息 (目前需要将config.toml, hifiserver.py以及hifisampler.exe三个文件放在同一目录下。建议解压后保持原文件结构不变)
+4. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 解压后运行 'hifiserver.py'.
+5. 将utau的重采样器设置为 `hifisampler.exe`.
 # 感谢：
 - [yjzxkxdn](https://github.com/yjzxkxdn)
 - [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
