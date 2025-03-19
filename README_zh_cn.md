@@ -24,7 +24,7 @@ pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 ```
 3. 在[torch官网](https://pytorch.org/)下载cuda版本的pytorch (如果你确定只使用onnx版，那么可以下载cpu版的pytorch)
 具体安装方法：进入后往下滑，看到INSTALL PYTORCH以及一个表格，PyTorch Build选Stable、Your OS选你的操作系统、Package选pip、Language选python、Compute Platform如果要下载gpu版就选带cuda的，下载cpu版选cpu ，然后复制Run this Command右边表格里的命令到终端运行
-4. 在config.toml中填入对应路径信息 (目前需要将config.toml, hifiserver.py以及hifisampler.exe三个文件放在同一目录下。建议解压后保持原文件结构不变)
+4. 在config.toml中填入对应路径信息 (目前需要将config.toml, hifiserver.py，hifisampler.exe以及launch_server.py四个文件放在同一目录下。建议解压后保持原文件结构不变)
 5. 运行 'hifiserver.py'. 运行方法：在终端输入 python hifiserver.py
 6. 将utau的重采样器设置为 `hifisampler.exe`.
 # 感谢：
