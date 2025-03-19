@@ -17,3 +17,4 @@ pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 # Acknowledgments:
 - [yjzxkxdn](https://github.com/yjzxkxdn)
 - [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
+- [MinaminoTenki](https://github.com/Lanhuace-Wan)
