@@ -4,6 +4,7 @@ import os
 import re
 from pathlib import Path # path manipulation
 import dataclasses
+import yaml
 
 import numpy as np # Numpy <3
 import torch
@@ -13,7 +14,7 @@ import resampy # Resampler (as in sampling rate stuff)
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from wav2mel import PitchAdjustableMelSpectrogram
-
+from hnsep.nets import CascadedNet
 
 version = '0.0.3-hifisampler'
 help_string = '''usage: hifisampler in_file out_file pitch velocity [flags] [offset] [length] [consonant] [cutoff] [volume] [modulation] [tempo] [pitch_string]
@@ -58,11 +59,20 @@ class Config:
     mel_fmin: float = 40     # 必须和vocoder训练时一致 
     mel_fmax: float = 16000  # 必须和vocoder训练时一致 
     fill: int = 6
-    vocoder_path: str = r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt"
+    vocoder_path: str = r"path\to\your\pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt"
     model_type: str = 'ckpt' # or 'onnx'
+    hnsep_model_path: str = r"path\to\your\hnsep_240512\vr\model.pt"
     wave_norm: bool = True
     loop_mode: bool = False
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+class DotDict(dict):
+    def __getattr__(*args):         
+        val = dict.get(*args)         
+        return DotDict(val) if type(val) is dict else val   
+
+    __setattr__ = dict.__setitem__    
+    __delattr__ = dict.__delitem__
 
 def dynamic_range_compression_torch(x, C=1, clip_val=1e-9):
     return torch.log(torch.clamp(x, min=clip_val) * C)
@@ -106,6 +116,24 @@ def loudness_norm(
         audio = audio[:original_length]
     
     return audio
+
+def load_sep_model(model_path, device='cpu'):
+    config_file = os.path.join(os.path.split(model_path)[0], 'config.yaml')
+    with open(config_file, "r") as config:
+        args = yaml.safe_load(config)
+    args = DotDict(args)
+    model = CascadedNet(
+                args.n_fft, 
+                args.hop_length, 
+                args.n_out, 
+                args.n_out_lstm, 
+                True, 
+                is_mono=args.is_mono,
+                fixed_length = True if args.fixed_length is None else args.fixed_length)
+    model.to(device)
+    model.load_state_dict(torch.load(model_path, map_location='cpu'))
+    model.eval()
+    return model, args
 
 # Pitch string interpreter
 def to_uint6(b64):
@@ -418,8 +446,11 @@ class Resampler:
         # Setup cache path file
         fname = self.in_file.name
         features_path = self.in_file.with_suffix(cache_ext)
-        logging.info(f'Cache path: {features_path}')
         features = None
+        if "B" in self.flags.keys():
+            #把B的数值加入Cache path里来区分
+            features_path = features_path.with_name(f'{fname}_B{self.flags["B"]}{features_path.suffix}')
+        logging.info(f'Cache path: {features_path}')
 
         if 'G' in self.flags.keys():
             logging.info('G flag exists. Forcing feature generation.')
@@ -448,19 +479,42 @@ class Resampler:
             A dictionary of the MEL.
         """
         wave = read_wav(self.in_file)
+        if Config.wave_norm:
+            wave = loudness_norm(wave, Config.sample_rate, peak = -1, loudness=-16.0, block_size=0.400)
+        wave = torch.from_numpy(wave).to(dtype=torch.float32, device=Config.device).unsqueeze(0).unsqueeze(0)
+        print(wave.shape)
 
-        wave_max = np.max(np.abs(wave))
+        if "B" in self.flags.keys():
+            breath = self.flags['B']
+            if breath != 50:
+                logging.info('B flag exists. Breathing.')
+                with torch.no_grad():
+                    seg_output = hnsep_model.predict_fromaudio(wave) 
+                print(seg_output.shape)
+                breath = np.clip(breath, 0, 100)
+                if breath < 50:
+                    wave = (breath/50)*(wave - seg_output) + seg_output
+                else:    
+                    wave = (wave - seg_output) + seg_output*((100-breath)/50)
+
+        wave = wave.squeeze(0)
+        if Config.wave_norm:
+            wave = wave.squeeze(0).cpu().numpy()
+            wave = loudness_norm(wave, Config.sample_rate, peak = -1, loudness=-16.0, block_size=0.400)
+            wave = torch.from_numpy(wave).to(dtype=torch.float32, device=Config.device).unsqueeze(0)
+        wave_max = torch.max(torch.abs(wave))
         if wave_max >= 0.5:
             logging.info('The audio volume is too high. Scaling down to 0.5')
             # 先缩小到最大0.5
             scale = 0.5 / wave_max
             wave = wave * scale
+            scale = scale.cpu().numpy()
         else:
             logging.info('The audio volume is already low enough')
             scale = 1.0
 
         mel_origin = melAnalysis(
-            torch.from_numpy(wave).to(dtype=torch.float32, device=Config.device).unsqueeze(0),
+            wave,
             0, 1).squeeze()
         logging.info(f'mel_origin: {mel_origin.shape}')
         mel_origin = dynamic_range_compression_torch(mel_origin).cpu().numpy()
@@ -661,10 +715,8 @@ class Resampler:
         else:
             raise ValueError(f"Unsupported model type: {Config.model_type}")
         
-        if Config.wave_norm:
-            render = loudness_norm(render, Config.sample_rate, peak = -1, loudness=-14.0, block_size=0.100)
-        else:
-            render = render / scale
+
+        render = render / scale
         new_max = np.max(np.abs(render))
         if new_max > 1:
             render = render / new_max
@@ -740,6 +792,9 @@ if __name__ == '__main__':
     else:
         Config.model_type = vocoder_path.suffix
         raise ValueError(f'Invalid model type: {Config.model_type}')
+    
+    hnsep_model, hnsep_model_args = load_sep_model(Config.hnsep_model_path, Config.device)
+    logging.info(f'Loaded HN-SEP: {Config.hnsep_model_path}')
 
     melAnalysis = PitchAdjustableMelSpectrogram(
         sample_rate=Config.sample_rate, 
