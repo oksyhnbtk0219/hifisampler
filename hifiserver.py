@@ -43,7 +43,7 @@ note_re = re.compile(r'([A-G]#?)(-?\d+)') # Note Regex for conversion
 cache_ext = '.hifi.npz' # cache file extension
 
 # Flags
-flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't', 'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z']
+flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't', 'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'Me']
 flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
@@ -589,7 +589,7 @@ class Resampler:
         logging.info(f'length_req: {length_req}')
         logging.info(f'stretch_length: {stretch_length}')
 
-        if Config.loop_mode:
+        if Config.loop_mode or "Me" in self.flags.keys():
             # 添加循环拼接模式
             logging.info('Looping.')
             logging.info(f'con_mel_frame: {int((con + thop_origin/2)//thop_origin)}')
