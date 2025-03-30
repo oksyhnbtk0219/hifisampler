@@ -447,9 +447,9 @@ class Resampler:
         fname = self.in_file.name
         features_path = self.in_file.with_suffix(cache_ext)
         features = None
-        if "B" in self.flags.keys():
-            #把B的数值加入Cache path里来区分
-            features_path = features_path.with_name(f'{fname}_B{self.flags.get("B", "")}_V{self.flags.get("V", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
+
+        #把flags加入Cache path里来区分
+        features_path = features_path.with_name(f'{fname}_B{self.flags.get("B", "")}_V{self.flags.get("V", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
         logging.info(f'Cache path: {features_path}')
 
         if 'G' in self.flags.keys():
