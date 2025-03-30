@@ -21,7 +21,6 @@ class Program
             Console.Error.WriteLine("[Main] No arguments provided.");
             Environment.Exit(1);
         }
-        Console.WriteLine($"[Main] Arguments received: {string.Join(" ", args)}");
 
         // Trying to dectect the port
         Console.WriteLine($"[Main] Checking if port {targetPort} is in use...");
@@ -29,50 +28,48 @@ class Program
         {
             Console.WriteLine($"[Main] Port {targetPort} is not in use. Attempting to launch server.");
 
-            // Get the path for launching the launch_server.py script
-            string exeDirectory = AppContext.BaseDirectory;
-            string launcherScriptPath = Path.Combine(exeDirectory, launcherScriptName);
-            Console.WriteLine($"[Main] {launcherScriptName} path: {launcherScriptPath}");
+        // Get the path for launching the launch_server.py script
+        string exeDirectory = AppContext.BaseDirectory;
+        string launcherScriptPath = Path.Combine(exeDirectory, launcherScriptName);
 
-            if (!File.Exists(launcherScriptPath))
-            {
-                Console.Error.WriteLine($"[Main] Error: {launcherScriptName} not found at '{launcherScriptPath}'.");
-                Environment.Exit(1);
-            }
-
-            // Start the script with keep windows open
-            try
-            {
-                LaunchServerLauncher(launcherScriptPath);
-                Console.WriteLine("[Main] Waiting for the server to start...");
-                bool serverStarted = false;
-                for (int i = 0; i < 30; i++) // 
-                {
-                    if (IsPortInUse(targetPort))
-                    {
-                        Console.WriteLine($"[Main] Server started on port {targetPort} after {i+1} seconds.");
-                        serverStarted = true;
-                        break;
-                    }
-                    else
-                    {
-                        Thread.Sleep(1000);
-                    }
-                }
-            
-                if (!serverStarted)
-                {
-                    Console.Error.WriteLine("[Main] Error: Server did not start within 20 seconds.");
-                    Environment.Exit(1);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"[Main] Error launching server: {ex.Message}");
-                Environment.Exit(1);
-            }
-            
+        if (!File.Exists(launcherScriptPath))
+        {
+            Console.Error.WriteLine($"[Main] Error: {launcherScriptName} not found at '{launcherScriptPath}'.");
+            Environment.Exit(1);
         }
+
+        // Start the script with keep windows open
+        try
+        {
+            LaunchServerLauncher(launcherScriptPath);
+            Console.WriteLine("[Main] Waiting for the server to start...");
+            bool serverStarted = false;
+                for (int i = 0; i < 90; i++)
+            {
+                if (IsPortInUse(targetPort))
+                {
+                    Console.WriteLine($"[Main] Server started on port {targetPort} after {i + 1} seconds.");
+                    serverStarted = true;
+                    break;
+                }
+                else
+                {
+                    await Task.Delay(1000);
+                }
+            }
+
+            if (!serverStarted)
+            {
+                    Console.Error.WriteLine("[Main] Error: Server did not start within 90 seconds.");
+                Environment.Exit(1);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"[Main] Error launching server: {ex.Message}");
+            Environment.Exit(1);
+        }
+    }
 
         // Communicate with server (From Straycat original code)
         try
@@ -80,12 +77,12 @@ class Program
             var postFields = string.Join(" ", args);
             var content = new StringContent(postFields, Encoding.UTF8, "application/x-www-form-urlencoded");
 
-            HttpResponseMessage response = await client.PostAsync("http://127.0.0.1:8572", content); 
+            HttpResponseMessage response = await client.PostAsync("http://127.0.0.1:8572", content);
 
             if (response.IsSuccessStatusCode)
             {
                 Console.WriteLine("Success: Straycat Resampled Sucessfully");
-            } 
+            }
             else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
             {
                 Console.Error.WriteLine("Error: StrayCat got an incorrect amount of arguments or the arguments were out of order. Please check the input data before continuing.");
@@ -105,23 +102,24 @@ class Program
         }
     }
 
+    // Define port dectecting method
     static bool IsPortInUse(int port)
     {
-        // Define port dectecting method
         try
         {
-            using (var client = new TcpClient())
+            using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
             {
-                var result = client.BeginConnect("127.0.0.1", port, null, null);
-                var success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
+                IAsyncResult result = socket.BeginConnect("127.0.0.1", port, null, null);
+                bool success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(25)); // Try 25ms
 
                 if (success)
                 {
-                    client.EndConnect(result);
+                    socket.EndConnect(result);
                     return true;
                 }
                 else
                 {
+                    socket.Close(); // Ensure the socket is closed if the connection fails
                     return false;
                 }
             }
@@ -160,7 +158,7 @@ class Program
                 {
                     // Check if the terminal is available
                     Process.Start(new ProcessStartInfo { FileName = terminal, Arguments = "--version", RedirectStandardOutput = true, UseShellExecute = false }).WaitForExit();
-                   
+
                     command = terminal;
 
                     if (terminal == "gnome-terminal")
@@ -173,7 +171,7 @@ class Program
                     }
                     Console.WriteLine($"[LaunchServerLauncher] Using terminal: {command} {arguments}");
                     terminalFound = true; // Find a suitable terminal and flip the flag
-                    break; 
+                    break;
                 }
                 catch (Exception)
                 {
@@ -211,7 +209,7 @@ class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"[LaunchServerLauncher] Error starting server launcher: {ex}");
-            throw; 
+            throw;
         }
     }
 }
