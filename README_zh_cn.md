@@ -27,6 +27,19 @@ pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 4. 在config.toml中填入对应路径信息 (目前需要将config.toml, hifiserver.py，hifisampler.exe以及launch_server.py四个文件放在同一目录下。建议解压后保持原文件结构不变)
 5. 运行 'hifiserver.py'. 运行方法：在终端输入 python hifiserver.py
 6. 将utau的重采样器设置为 `hifisampler.exe`.
+## 已实现的flags
+
+* **g:** 调整性别/共振峰。
+    * 范围: `-600` 到 `600` | 默认: `0`
+* **B:** 控制气息/噪波成分的量。
+    * 范围: `0` 到 `500` | 默认: `100`
+* **V:** 控制发声/谐波成分的量。
+    * 范围: `0` 到 `150` | 默认: `100`
+* **G:** 强制重新生成特征缓存（忽略已有缓存）。
+    * 无需数值
+* **Me:** 为长音启用 Mel 频谱循环模式。
+    * 无需数值
+
 # 感谢：
 - [yjzxkxdn](https://github.com/yjzxkxdn)
 - [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
