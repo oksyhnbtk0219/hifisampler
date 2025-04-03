@@ -8,7 +8,7 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
 ## How to use? 
 1. Install Python 3.10 and run the following commands (it's strongly recommended to use conda for easier environment management):
 ```
-pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
+pip install -r requirements.txt
 ```
 2. Download the CUDA version of PyTorch from the Torch website (If you're certain about only using the ONNX version, then downloading the CPU version of PyTorch is fine).
 3. Fill out the config.toml. (config.toml, hifisampler.exe, hifiserver.py and launch_server.py should be in the same directory, for now. It is suggested to keep the original file hierarchy as in the compressed file)
