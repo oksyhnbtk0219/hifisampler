@@ -13,6 +13,8 @@ def get_default_conda_base_path():
             os.path.expanduser(r"~\anaconda3"),
             r"C:\miniconda3",
             r"C:\anaconda3",
+            r"C:\ProgramData\Miniconda3",
+            r"C:\ProgramData\Anaconda3"
         ]
     elif sys.platform in ("linux", "linux2", "darwin"):
         # Common installation locations on Linux/macOS
