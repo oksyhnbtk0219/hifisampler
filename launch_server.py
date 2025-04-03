@@ -10,7 +10,7 @@ def start_in_conda_env(config):
     conda_base_path = config.get("conda_base_path")  # Use get method to allow conda_base_path as empty
 
 # Choose how to find conda path based on operating system
- if sys.platform == "win32":  # Windows
+if sys.platform == "win32":  # Windows
         if conda_base_path:
             activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
         else:
