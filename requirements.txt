@@ -1,0 +1,11 @@
+numpy
+scipy
+yaml
+pyyaml
+pathlib
+torch
+librosa
+soundfile
+resampy
+onnxruntime
+pyloudnorm
