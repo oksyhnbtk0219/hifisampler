@@ -1,7 +1,7 @@
 import subprocess
 import os
 import sys
-import tomli  # Or import tomllib if Python < 3.11
+import yaml
 
 
 def start_in_conda_env(config):
@@ -22,7 +22,7 @@ def start_in_conda_env(config):
                     break
             else:
                 raise FileNotFoundError(
-                    "Could not find activate.bat. Please specify conda_base_path in config.toml."
+                    "Could not find activate.bat. Please specify conda_base_path in config.yaml."
                 )
         # Use cmd /K to keep command prompt open
         command = (
@@ -40,7 +40,7 @@ def start_in_conda_env(config):
                     break
             else:
                 raise FileNotFoundError(
-                    "Could not find conda. Please specify conda_base_path in config.toml."
+                    "Could not find conda. Please specify conda_base_path in config.yaml."
                 )
         # Starts with conda run
         command = f'conda run -n {conda_env_name} python "{python_script_path}"'
@@ -84,23 +84,31 @@ def start_in_conda_env(config):
 
 
 if __name__ == "__main__":
-    # Read config.toml
-    config_file_path = "config.toml"  # Set path of the config.toml
+    # Read config.yaml
+    config_file_path = "config.yaml"  # Set path of the config.yaml
     try:
-        with open(config_file_path, "rb") as f:
-            config = tomli.load(f)  # Or tomllib.load(f)
+        with open(config_file_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)  # Load yaml file
+        # Add a check if config loaded as None (e.g., empty file)
+    if config is None:
+        config = {} # Treat empty file as empty config
+        logging.warning(f"Configuration file '{config_file_path}' is empty.")
+
+    logging.info("Configuration file loaded successfully.")
+    logging.debug(f"Config content: {config}")
+    
     except FileNotFoundError:
         print(f"Error: Config file not found: {config_file_path}")
         sys.exit(1)
-    except tomli.TOMLDecodeError as e:  # Or tomllib.TOMLDecodeError
-        print(f"Error decoding TOML file: {e}")
+    except yaml.YAMLError as e:
+        print(f"Error decoding yaml file: {e}")
         sys.exit(1)
 
     # Check wheather the config exist or not
     required_keys = ["conda_env_name", "python_script_path"]
     for key in required_keys:
         if key not in config:
-            print(f"Error: Missing required key '{key}' in config.toml")
+            print(f"Error: Missing required key '{key}' in config.yaml")
             sys.exit(1)
 
     # Call the function
