@@ -43,7 +43,7 @@ note_re = re.compile(r'([A-G]#?)(-?\d+)') # Note Regex for conversion
 cache_ext = '.hifi.npz' # cache file extension
 
 # Flags
-flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't', 'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'Me']
+flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't', 'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'V', 'Me']
 flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
@@ -59,10 +59,10 @@ class Config:
     mel_fmin: float = 40     # 必须和vocoder训练时一致 
     mel_fmax: float = 16000  # 必须和vocoder训练时一致 
     fill: int = 6
-    vocoder_path: str = r"path\to\your\pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt"
+    vocoder_path: str = r"\path\to\your\vocoder\pc_nsf_hifigan\model.ckpt"
     model_type: str = 'ckpt' # or 'onnx'
-    hnsep_model_path: str = r"path\to\your\hnsep_240512\vr\model.pt"
-    wave_norm: bool = True
+    hnsep_model_path: str = r"\path\to\your\hnsep\model.pt"
+    wave_norm: bool = False
     loop_mode: bool = False
     peak_limit: float = 1.0
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -452,9 +452,9 @@ class Resampler:
         fname = self.in_file.name
         features_path = self.in_file.with_suffix(cache_ext)
         features = None
-        if "B" in self.flags.keys():
-            #把B的数值加入Cache path里来区分
-            features_path = features_path.with_name(f'{fname}_B{self.flags["B"]}{features_path.suffix}')
+
+        #把flags加入Cache path里来区分
+        features_path = features_path.with_name(f'{fname}_B{self.flags.get("B", "")}_V{self.flags.get("V", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
         logging.info(f'Cache path: {features_path}')
 
         if 'G' in self.flags.keys():
@@ -487,19 +487,16 @@ class Resampler:
         wave = torch.from_numpy(wave).to(dtype=torch.float32, device=Config.device).unsqueeze(0).unsqueeze(0)
         print(wave.shape)
 
-        if "B" in self.flags.keys():
-            breath = self.flags['B']
-            if breath != 50:
-                logging.info('B flag exists. Breathing.')
-                with torch.no_grad():
-                    seg_output = hnsep_model.predict_fromaudio(wave) 
-                print(seg_output.shape)
-                breath = np.clip(breath, 0, 100)
-                if breath < 50:
-                    wave = (breath/50)*(wave - seg_output) + seg_output
-                else:    
-                    wave = (wave - seg_output) + seg_output*((100-breath)/50)
-
+        breath = self.flags.get("B", 100)
+        voicing = self.flags.get("V", 100)
+        if breath != 100 or voicing != 100:
+            logging.info('B or V flag exists. Breathing or voicing.')
+            with torch.no_grad():
+                seg_output = hnsep_model.predict_fromaudio(wave)  # 预测谐波
+            breath = np.clip(breath, 0, 500)
+            voicing = np.clip(voicing, 0, 150)
+            wave = (breath/100)*(wave - seg_output) + (voicing/100)*seg_output
+                
         wave = wave.squeeze(0).squeeze(0).cpu().numpy()
         wave = torch.from_numpy(wave).to(dtype=torch.float32, device=Config.device).unsqueeze(0) # 默认不缩放
         wave_max = torch.max(torch.abs(wave))
@@ -512,10 +509,14 @@ class Resampler:
         else:
             logging.info('The audio volume is already low enough')
             scale = 1.0
+            
+        gender = self.flags.get("g", 0)
+        gender=np.clip(gender, -600, 600)
+        logging.info(f'gender: {gender}')
 
         mel_origin = melAnalysis(
             wave,
-            0, 1).squeeze()
+            gender/100, 1).squeeze()
         logging.info(f'mel_origin: {mel_origin.shape}')
         mel_origin = dynamic_range_compression_torch(mel_origin).cpu().numpy()
         logging.info('Saving features.')
