@@ -9,21 +9,34 @@ def start_in_conda_env(config):
     python_script_path = config["python_script_path"]
     conda_base_path = config.get("conda_base_path")  # Use get method to allow conda_base_path as empty
 
-    # Choose how to find conda path based on operating system
-    if sys.platform == "win32":  # Windows
+# Choose how to find conda path based on operating system
+ if sys.platform == "win32":  # Windows
         if conda_base_path:
             activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
         else:
-            # Try to find conda from PATH
-            for path in os.environ["PATH"].split(os.pathsep):
-                possible_path = os.path.join(path, "activate.bat")
-                if os.path.exists(possible_path):
-                    activate_cmd = possible_path
-                    break
-            else:
-                raise FileNotFoundError(
-                    "Could not find activate.bat. Please specify conda_base_path in config.yaml."
-                )
+        # Try to find conda from PATH 
+        activate_cmd = None 
+        for path in os.environ.get("PATH", "").split(os.pathsep):
+            possible_path = os.path.join(path, "activate.bat")
+            if os.path.exists(possible_path):
+                activate_cmd = possible_path
+                break 
+
+        if activate_cmd is None: 
+            fallback_path_mini = os.path.join(os.path.expanduser("~"), "miniconda3", "Scripts", "activate.bat")
+            if os.path.exists(fallback_path_mini):
+                activate_cmd = fallback_path_mini
+
+        if activate_cmd is None: 
+            fallback_path_ana = os.path.join(os.path.expanduser("~"), "anaconda3", "Scripts", "activate.bat")
+            if os.path.exists(fallback_path_ana):
+                activate_cmd = fallback_path_ana
+        
+        if activate_cmd is None:
+            raise FileNotFoundError(
+                "Could not find activate.bat in PATH or default locations (~/miniconda3, ~/anaconda3). "
+                "Please specify conda_base_path in config.yaml or ensure Conda is correctly installed and in PATH."
+            )
         # Use cmd /K to keep command prompt open
         command = (
             f'cmd /K ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
