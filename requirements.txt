@@ -1,6 +1,5 @@
 numpy
 scipy
-yaml
 pyyaml
 pathlib
 torch
