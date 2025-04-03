@@ -14,6 +14,19 @@ pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
 3. Fill out the config.toml. (config.toml, hifisampler.exe, hifiserver.py and launch_server.py should be in the same directory, for now. It is suggested to keep the original file hierarchy as in the compressed file)
 4. Download the [release](https://github.com/openhachimi/hifisampler/releases), unzip it, and run 'hifiserver.py'.
 5. Set UTAU's resampler to `hifisampler.exe`.
+## Implemented flags
+
+* **g:** Adjust gender/formants.  
+    * Range: `-600` to `600` | Default: `0`
+* **B:** Adjust breath/noise.  
+    * Range: `0` to `500` | Default: `100`
+* **V:** Adjust voice/harmonic.  
+    * Range: `0` to `150` | Default: `100`
+* **G:** Force to regenerate feature cache（Ignoring existed cache）.  
+    * No value needed
+* **Me:** Enable Mel spectrum loop mode.  
+    * No value needed
+
 # Acknowledgments:
 - [yjzxkxdn](https://github.com/yjzxkxdn)
 - [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
