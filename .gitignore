@@ -19,3 +19,5 @@ x86/
 publish/
 .idea/
 .vscode/
+__pycache__/
+config.yaml
