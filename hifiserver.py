@@ -13,7 +13,7 @@ import resampy # Resampler (as in sampling rate stuff)
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from utils.load_config_from_yaml import load_config_from_yaml
-from wav2mel import PitchAdjustableMelSpectrogram
+from utils.wav2mel import PitchAdjustableMelSpectrogram
 from hnsep.nets import CascadedNet
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -793,7 +793,7 @@ if __name__ == '__main__':
             raise FileNotFoundError("No HifiGAN model found.")
 
     if vocoder_path.suffix == '.ckpt':
-        from nsf_hifigan import NsfHifiGAN
+        from utils.nsf_hifigan import NsfHifiGAN
         Config.model_type = 'ckpt'
         vocoder = NsfHifiGAN(model_path=vocoder_path)
         vocoder.to_device(Config.device)
