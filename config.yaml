@@ -1,4 +1,0 @@
-# Replace these paths with corresponding path on your computer
-conda_base_path: "path/to/your/file/Miniconda"
-conda_env_name: "put_conda_environment_name_here"
-python_script_path: "path/to/your/file/hifiserver.py"

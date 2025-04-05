@@ -1,3 +1,5 @@
+from pathlib import Path
+import shutil
 import subprocess
 import os
 import sys
@@ -150,10 +152,19 @@ def start_in_conda_env(config):
 
 if __name__ == "__main__":
     # Read config.yaml
-    config_file_path = "config.yaml"  # Set path of the config.yaml
+    config_file_path = Path("./config.yaml")  # Set path of the config.yaml
+    default_config_file_path = Path("./config.default.yaml")
+    if not config_file_path.exists():
+        if default_config_file_path.exists():
+            shutil.copy(default_config_file_path, config_file_path)
+        else:
+            print(f"Error: Default config file not found: {default_config_file_path}")
+            sys.exit(1)
+
     try:
         with open(config_file_path, "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)  # Load yaml file
+            config = config["env"]
         # Add a check if config loaded as None (e.g., empty file)
         if config is None:
             config = {}  # Treat empty file as empty config

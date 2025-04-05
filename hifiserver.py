@@ -1,5 +1,4 @@
 import logging
-logging.basicConfig(format='%(message)s', level=logging.INFO)
 import os
 import re
 from pathlib import Path # path manipulation
@@ -13,8 +12,11 @@ import scipy.interpolate as interp # Interpolator for feats
 import resampy # Resampler (as in sampling rate stuff)
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from wav2mel import PitchAdjustableMelSpectrogram
+from utils.load_config_from_yaml import load_config_from_yaml
+from utils.wav2mel import PitchAdjustableMelSpectrogram
 from hnsep.nets import CascadedNet
+
+logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 version = '0.0.3-hifisampler'
 help_string = '''usage: hifisampler in_file out_file pitch velocity [flags] [offset] [length] [consonant] [cutoff] [volume] [modulation] [tempo] [pitch_string]
@@ -48,6 +50,7 @@ flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
 
+@load_config_from_yaml(script_path=Path(__file__))
 @dataclasses.dataclass
 class Config:
     sample_rate: int = 44100  # UTAU only really likes 44.1khz
@@ -790,7 +793,7 @@ if __name__ == '__main__':
             raise FileNotFoundError("No HifiGAN model found.")
 
     if vocoder_path.suffix == '.ckpt':
-        from nsf_hifigan import NsfHifiGAN
+        from utils.nsf_hifigan import NsfHifiGAN
         Config.model_type = 'ckpt'
         vocoder = NsfHifiGAN(model_path=vocoder_path)
         vocoder.to_device(Config.device)
