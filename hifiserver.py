@@ -99,15 +99,11 @@ def loudness_norm(
         loudness normalized audio
     """
 
-    # peak normalize audio to [peak] dB
+    # padding length to minimum block_size
     original_length = len(audio)
-    # Check if the audio is shorter than block_size and pad if necessary
     if original_length < int(rate * block_size):
         padding_length = int(rate * block_size) - original_length
         audio = np.pad(audio, (0, padding_length), mode='reflect')
-    
-    # Peak normalize audio to [peak] dB
-    audio = pyln.normalize.peak(audio, peak)
 
     # Measure the loudness first
     meter = pyln.Meter(rate, block_size=block_size)  # create BS.1770 meter
