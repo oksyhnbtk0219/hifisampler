@@ -33,7 +33,7 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
   * Range: `0` to `500` | Default: `100`
 * **V:** Adjust voice/harmonic.  
   * Range: `0` to `150` | Default: `100`
-* **P:** Normalize loudness at the note level, targeting -16 LUFS.  Enable this by setting `loudness_norm` to `True` in your `config.yaml` file.
+* **P:** Normalize loudness at the note level, targeting -16 LUFS.  Enable this by setting `wave_norm` to `true` in your `config.yaml` file.
   * Range: `0` to `100` | Default: `100`
 * **G:** Force to regenerate feature cache（Ignoring existed cache）.  
   * No value needed
