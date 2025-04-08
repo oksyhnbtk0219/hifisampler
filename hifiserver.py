@@ -698,6 +698,8 @@ class Resampler:
         logging.info('Calculating pitch.')
         # Calculate pitch in MIDI note number terms
         pitch = self.pitchbend / 100 + self.pitch
+        if "t" in self.flags.keys() and self.flags["t"]:
+            pitch = pitch + self.flags["t"] / 100
         t_pitch = 60 * np.arange(len(pitch)) / (self.tempo * 96) + new_start
         pitch_interp = interp.Akima1DInterpolator(t_pitch, pitch)
         pitch_render = pitch_interp(np.clip(t, new_start, t_pitch[-1]))
