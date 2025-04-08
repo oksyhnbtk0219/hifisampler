@@ -35,6 +35,8 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
   * Range: `0` to `150` | Default: `100`
 * **P:** Normalize loudness at the note level, targeting -16 LUFS.  Enable this by setting `wave_norm` to `true` in your `config.yaml` file.
   * Range: `0` to `100` | Default: `100`
+* **t:** Shift the pitch by a specific amount, in cents. 1 cent = 1/100 of a semitone.
+  * Range: `-1200` to `1200` | Default: `0`
 * **G:** Force to regenerate feature cache（Ignoring existed cache）.  
   * No value needed
 * **Me:** Enable Mel spectrum loop mode.  
