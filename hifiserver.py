@@ -18,7 +18,7 @@ from hnsep.nets import CascadedNet
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
-version = '0.0.3-hifisampler'
+version = '0.0.5-hifisampler'
 help_string = '''usage: hifisampler in_file out_file pitch velocity [flags] [offset] [length] [consonant] [cutoff] [volume] [modulation] [tempo] [pitch_string]
 
 Resamples using the PC-NSF-HIFIGAN Vocoder.
@@ -47,7 +47,7 @@ cache_ext = '.hifi.npz'  # cache file extension
 
 # Flags
 flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't',
-         'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'V', 'Me']
+         'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'Hv', 'Hb', 'Ht', 'Me']
 flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
@@ -129,7 +129,8 @@ def loudness_norm(
 
 
 def load_sep_model(model_path, device='cpu'):
-    config_file = os.path.join(os.path.split(model_path)[0], 'config.yaml')
+    model_dir = os.path.dirname(os.path.abspath(model_path))
+    config_file = os.path.join(model_dir, 'config.yaml')
     with open(config_file, "r") as config:
         args = yaml.safe_load(config)
     args = DotDict(args)
@@ -146,6 +147,52 @@ def load_sep_model(model_path, device='cpu'):
     model.eval()
     return model, args
 
+def pre_emphasis_base_tension(wave, b):
+    """
+    Args:
+        wave: [1, 1, t]
+    """
+    original_length = wave.size(-1)
+    pad_length = (Config.hop_size - (original_length % Config.hop_size)) % Config.hop_size
+    wave = torch.nn.functional.pad(wave, (0, pad_length), mode='constant', value=0)
+    wave = wave.squeeze(1) 
+
+    spec = torch.stft(
+        wave,
+        Config.n_fft,
+        hop_length=Config.hop_size,
+        win_length=Config.win_size,
+        window=torch.hann_window(Config.win_size).to(wave.device),
+        return_complex=True
+    )
+    spec_amp = torch.abs(spec) 
+    spec_phase = torch.atan2(spec.imag, spec.real)
+
+    spec_amp_db = torch.log(torch.clamp(spec_amp, min=1e-9))
+
+    fft_bin = Config.n_fft // 2 + 1
+    x0 = fft_bin / ((Config.sample_rate / 2) / 1500)
+    freq_filter = (-b / x0) * torch.arange(0, fft_bin, device=wave.device) + b
+    spec_amp_db = spec_amp_db + torch.clamp(freq_filter, min=-2, max=2).unsqueeze(0).unsqueeze(2)
+
+    spec_amp = torch.exp(spec_amp_db)
+
+    filtered_wave = torch.istft(
+        torch.complex(spec_amp * torch.cos(spec_phase), spec_amp * torch.sin(spec_phase)),
+        n_fft=Config.n_fft,
+        hop_length=Config.hop_size,
+        win_length=Config.win_size,
+        window=torch.hann_window(Config.win_size).to(wave.device)
+    )
+
+    original_max = torch.max(torch.abs(wave))
+    filtered_max = torch.max(torch.abs(filtered_wave))
+    filtered_wave = filtered_wave * (original_max / filtered_max) * (np.clip(b/(-15), 0, 0.33) + 1)
+    filtered_wave = filtered_wave.unsqueeze(1)
+    filtered_wave = filtered_wave[:,:, :original_length]
+
+    return filtered_wave
+    
 # Pitch string interpreter
 def to_uint6(b64):
     """Convert one Base64 character to an unsigned integer.
@@ -469,7 +516,7 @@ class Resampler:
 
         # 把flags加入Cache path里来区分
         features_path = features_path.with_name(
-            f'{fname}_B{self.flags.get("B", "")}_V{self.flags.get("V", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
+            f'{fname}_Hb{self.flags.get("Hb", "")}_Hv{self.flags.get("Hv", "")}_Ht{self.flags.get("Ht", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
         logging.info(f'Cache path: {features_path}')
 
         if 'G' in self.flags.keys():
@@ -504,16 +551,21 @@ class Resampler:
             dtype=torch.float32, device=Config.device).unsqueeze(0).unsqueeze(0)
         print(wave.shape)
 
-        breath = self.flags.get("B", 100)
-        voicing = self.flags.get("V", 100)
-        if breath != 100 or voicing != 100:
-            logging.info('B or V flag exists. Breathing or voicing.')
+        breath = self.flags.get("Hb", 100)
+        voicing = self.flags.get("Hv", 100)
+        tension = self.flags.get("Ht", 0)
+        print(f'breath: {breath}, voicing: {voicing}, tension: {tension}')
+        if breath != 100 or voicing != 100 or tension != 0:
+            logging.info('Hb or Hv or Ht flag exists. Split audio into breath, voicing')
             with torch.no_grad():
                 seg_output = hnsep_model.predict_fromaudio(wave)  # 预测谐波
             breath = np.clip(breath, 0, 500)
             voicing = np.clip(voicing, 0, 150)
-            wave = (breath/100)*(wave - seg_output) + (voicing/100)*seg_output
-
+            if tension != 0:
+                tension = np.clip(tension, -100, 100)
+                wave = (breath/100)*(wave - seg_output) + pre_emphasis_base_tension((voicing/100)*seg_output, -tension/50)
+            else:
+                wave = (breath/100)*(wave - seg_output) + (voicing/100)*seg_output
         wave = wave.squeeze(0).squeeze(0).cpu().numpy()
         wave = torch.from_numpy(wave).to(
             dtype=torch.float32, device=Config.device).unsqueeze(0)  # 默认不缩放
