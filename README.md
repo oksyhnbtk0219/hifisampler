@@ -48,7 +48,9 @@ _Note: The flags `B` and `V` were renamed to `Hb` and `Hv` respectively because 
 
 ## Acknowledgments
 
-* [yjzxkxdn](https://github.com/yjzxkxdn)
-
-* [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
-* [MinaminoTenki](https://github.com/Lanhuace-Wan)
+- [yjzxkxdn](https://github.com/yjzxkxdn)
+- [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
+- [MinaminoTenki](https://github.com/Lanhuace-Wan)
+- [Linkzerosss](https://github.com/Linkzerosss)
+- [MUTED64](https://github.com/MUTED64)
+- [mili-tan](https://github.com/mili-tan)

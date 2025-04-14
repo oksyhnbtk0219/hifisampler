@@ -77,3 +77,5 @@ _注：由于 `B` 和 `V` 与其他 UTAU flags 名称冲突但定义不同，因
 - [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
 - [MinaminoTenki](https://github.com/Lanhuace-Wan)
 - [Linkzerosss](https://github.com/Linkzerosss)
+- [MUTED64](https://github.com/MUTED64)
+- [mili-tan](https://github.com/mili-tan)
