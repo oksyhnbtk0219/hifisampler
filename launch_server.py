@@ -156,43 +156,68 @@ if __name__ == "__main__":
     default_config_file_path = Path("./config.default.yaml")
     if not config_file_path.exists():
         if default_config_file_path.exists():
-            shutil.copy(default_config_file_path, config_file_path)
+            try:
+                shutil.copy(default_config_file_path, config_file_path)
+            except Exception as e:
+                print(f"Error copying default config file: {e}")
+                sys.exit(1)
         else:
             print(f"Error: Default config file not found: {default_config_file_path}")
             sys.exit(1)
 
+    env_config = {}
+
     try:
         with open(config_file_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)  # Load yaml file
-            config = config["env"]
-        # Add a check if config loaded as None (e.g., empty file)
-        if config is None:
-            config = {}  # Treat empty file as empty config
-            print(f"Warning: Configuration file '{config_file_path}' is empty.")
+            loaded_config = yaml.safe_load(f)  # Load yaml file
+
+            if loaded_config is None:
+                 print(f"Warning: Configuration file '{config_file_path}' is empty or invalid. Cannot proceed without environment configuration.")
+                 sys.exit(1)
+            elif isinstance(loaded_config, dict):
+                env_config_value = loaded_config.get("env")
+                if env_config_value is None:
+                     print(f"Error: 'env' key not found or its value is null in '{config_file_path}'. Cannot proceed without environment configuration.")
+                     sys.exit(1)
+                elif isinstance(env_config_value, dict):
+                    env_config = env_config_value
+                else:
+                    print(f"Error: The value under 'env' key in '{config_file_path}' is not a dictionary.")
+                    sys.exit(1)
+            else:
+                print(f"Error: Configuration file '{config_file_path}' does not contain a dictionary at the top level.")
+                sys.exit(1)
 
     except FileNotFoundError:
+        # This case is less likely due to the initial check, but kept for robustness
         print(f"Error: Config file not found: {config_file_path}")
         sys.exit(1)
     except yaml.YAMLError as e:
+        # Error decoding yaml file
         print(f"Error decoding yaml file: {e}")
         sys.exit(1)
+    except Exception as e:
+        print(f"An unexpected error occurred while processing '{config_file_path}': {e}")
+        sys.exit(1)
+
 
     # Check whether the config exist or not
     required_keys = ["conda_env_name", "python_script_path"]
-    for key in required_keys:
-        if key not in config:
-            print(f"Error: Missing required key '{key}' in config.yaml")
-            sys.exit(1)
+    missing_keys = [key for key in required_keys if key not in env_config]
+    if missing_keys:
+        print(f"Error: Missing required key(s) in the 'env' section of config.yaml: {', '.join(missing_keys)}")
+        sys.exit(1)
 
     # Check if python script exists
-    if not os.path.exists(config["python_script_path"]):
-        print(f"Error: Python script not found: {config['python_script_path']}")
+    script_path_str = str(env_config["python_script_path"])
+    if not os.path.exists(script_path_str):
+        print(f"Error: Python script not found: {script_path_str}")
         sys.exit(1)
 
     # Call the function
-    if start_in_conda_env(config):
+    if start_in_conda_env(env_config):
         print(
-            f"Successfully started '{config['python_script_path']}' in Conda environment '{config['conda_env_name']}'."
+            f"Successfully attempted to start '{script_path_str}' in Conda environment '{env_config['conda_env_name']}'."
         )
     else:
         print("Failed to start the script.")
