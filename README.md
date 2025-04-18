@@ -39,6 +39,8 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
   * Range: `-1200` to `1200` | Default: `0`
 * **Ht:** Adjust tension.  
   * Range: `-100` to `100` | Default: `0`
+* **A** Modulating the amplitude based on pitch variations, which helps creating a more realistic vibrato.
+  * Range: `-100` to `100` | Default: `0`
 * **G:** Force to regenerate feature cache (Ignoring existed cache).  
   * No value needed
 * **Me:** Enable Mel spectrum loop mode.  
@@ -48,9 +50,9 @@ _Note: The flags `B` and `V` were renamed to `Hb` and `Hv` respectively because 
 
 ## Acknowledgments
 
-- [yjzxkxdn](https://github.com/yjzxkxdn)
-- [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
-- [MinaminoTenki](https://github.com/Lanhuace-Wan)
-- [Linkzerosss](https://github.com/Linkzerosss)
-- [MUTED64](https://github.com/MUTED64)
-- [mili-tan](https://github.com/mili-tan)
+* [yjzxkxdn](https://github.com/yjzxkxdn)
+* [openvpi](https://github.com/openvpi) for the pc-nsf-hifigan
+* [MinaminoTenki](https://github.com/Lanhuace-Wan)
+* [Linkzerosss](https://github.com/Linkzerosss)
+* [MUTED64](https://github.com/MUTED64)
+* [mili-tan](https://github.com/mili-tan)
