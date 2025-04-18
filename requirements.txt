@@ -9,3 +9,4 @@ resampy
 onnxruntime
 pyloudnorm
 tomli
+filelock

@@ -3,6 +3,7 @@ import os
 import re
 from pathlib import Path  # path manipulation
 import dataclasses
+import traceback
 import yaml
 
 import numpy as np  # Numpy <3
@@ -11,6 +12,8 @@ import soundfile as sf  # WAV read + write
 import scipy.interpolate as interp  # Interpolator for feats
 import resampy  # Resampler (as in sampling rate stuff)
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import ThreadingMixIn
+from filelock import FileLock, Timeout
 
 from utils.load_config_from_yaml import load_config_from_yaml
 from utils.wav2mel import PitchAdjustableMelSpectrogram
@@ -147,15 +150,18 @@ def load_sep_model(model_path, device='cpu'):
     model.eval()
     return model, args
 
+
 def pre_emphasis_base_tension(wave, b):
     """
     Args:
         wave: [1, 1, t]
     """
     original_length = wave.size(-1)
-    pad_length = (Config.hop_size - (original_length % Config.hop_size)) % Config.hop_size
-    wave = torch.nn.functional.pad(wave, (0, pad_length), mode='constant', value=0)
-    wave = wave.squeeze(1) 
+    pad_length = (Config.hop_size - (original_length %
+                  Config.hop_size)) % Config.hop_size
+    wave = torch.nn.functional.pad(
+        wave, (0, pad_length), mode='constant', value=0)
+    wave = wave.squeeze(1)
 
     spec = torch.stft(
         wave,
@@ -165,7 +171,7 @@ def pre_emphasis_base_tension(wave, b):
         window=torch.hann_window(Config.win_size).to(wave.device),
         return_complex=True
     )
-    spec_amp = torch.abs(spec) 
+    spec_amp = torch.abs(spec)
     spec_phase = torch.atan2(spec.imag, spec.real)
 
     spec_amp_db = torch.log(torch.clamp(spec_amp, min=1e-9))
@@ -173,12 +179,14 @@ def pre_emphasis_base_tension(wave, b):
     fft_bin = Config.n_fft // 2 + 1
     x0 = fft_bin / ((Config.sample_rate / 2) / 1500)
     freq_filter = (-b / x0) * torch.arange(0, fft_bin, device=wave.device) + b
-    spec_amp_db = spec_amp_db + torch.clamp(freq_filter, min=-2, max=2).unsqueeze(0).unsqueeze(2)
+    spec_amp_db = spec_amp_db + \
+        torch.clamp(freq_filter, min=-2, max=2).unsqueeze(0).unsqueeze(2)
 
     spec_amp = torch.exp(spec_amp_db)
 
     filtered_wave = torch.istft(
-        torch.complex(spec_amp * torch.cos(spec_phase), spec_amp * torch.sin(spec_phase)),
+        torch.complex(spec_amp * torch.cos(spec_phase),
+                      spec_amp * torch.sin(spec_phase)),
         n_fft=Config.n_fft,
         hop_length=Config.hop_size,
         win_length=Config.win_size,
@@ -187,13 +195,16 @@ def pre_emphasis_base_tension(wave, b):
 
     original_max = torch.max(torch.abs(wave))
     filtered_max = torch.max(torch.abs(filtered_wave))
-    filtered_wave = filtered_wave * (original_max / filtered_max) * (np.clip(b/(-15), 0, 0.33) + 1)
+    filtered_wave = filtered_wave * \
+        (original_max / filtered_max) * (np.clip(b/(-15), 0, 0.33) + 1)
     filtered_wave = filtered_wave.unsqueeze(1)
-    filtered_wave = filtered_wave[:,:, :original_length]
+    filtered_wave = filtered_wave[:, :, :original_length]
 
     return filtered_wave
-    
+
 # Pitch string interpreter
+
+
 def to_uint6(b64):
     """Convert one Base64 character to an unsigned integer.
 
@@ -295,6 +306,8 @@ def pitch_string_to_cents(x):
         return np.concatenate([res, np.zeros(1)])
 
 # Pitch conversion
+
+
 def note_to_midi(x):
     """Note name to MIDI note number."""
     note, octave = note_re.match(x).group(1, 2)
@@ -307,6 +320,8 @@ def midi_to_hz(x):
     return 440 * np.exp2((x - 69) / 12)
 
 # WAV read/write
+
+
 def read_wav(loc):
     """Read audio files supported by soundfile and resample to 44.1kHz if needed. Mixes down to mono if needed.
 
@@ -509,27 +524,67 @@ class Resampler:
         features : dict
             A dictionary of the MEL.
         """
-        # Setup cache path file
-        fname = self.in_file.name
         features_path = self.in_file.with_suffix(cache_ext)
-        features = None
 
-        # 把flags加入Cache path里来区分
-        features_path = features_path.with_name(
-            f'{fname}_Hb{self.flags.get("Hb", "")}_Hv{self.flags.get("Hv", "")}_Ht{self.flags.get("Ht", "")}_g{self.flags.get("g", "")}{features_path.suffix}')
-        logging.info(f'Cache path: {features_path}')
+        self.flags['Hb'] = self.flags.get('Hb', 100)
+        self.flags['Hv'] = self.flags.get('Hv', 100)
+        self.flags['Ht'] = self.flags.get('Ht', 0)
+        self.flags['g'] = self.flags.get('g', 0)
 
-        if 'G' in self.flags.keys():
-            logging.info('G flag exists. Forcing feature generation.')
-            features = self.generate_features(features_path)
-        elif os.path.exists(features_path):
-            # Load if it exists
-            logging.info(f'Reading {fname}{cache_ext}.')
-            features = np.load(features_path)
+        flag_suffix = '_'.join(f"{k}{v if v is not None else ''}" for k, v in sorted(
+            self.flags.items()) if k in ['Hb', 'Hv', 'Ht', 'g'])
+        if flag_suffix:
+            features_path = features_path.with_name(
+                f'{self.in_file.stem}_{flag_suffix}{cache_ext}')
         else:
-            # Generate if not
-            logging.info(f'{fname}{cache_ext} not found. Generating features.')
-            features = self.generate_features(features_path)
+            features_path = features_path.with_name(
+                f'{self.in_file.stem}{cache_ext}')
+
+        lock_path = str(features_path) + ".lock"
+
+        lock = FileLock(lock_path, timeout=60)  # 设置60秒超时
+        features = None  # 初始化 features 变量
+
+        try:
+            with lock:
+                force_generate = 'G' in self.flags.keys()
+
+                if force_generate:
+                    logging.info('G flag exists. Forcing feature generation.')
+                    features = self.generate_features(features_path)
+                elif features_path.exists():
+                    try:
+                        features = np.load(str(features_path))
+                        logging.info('Cache loaded successfully.')
+                    except (EOFError, OSError, ValueError) as e:
+                        logging.warning(
+                            f'Failed to load cache {features_path} ({type(e).__name__}: {e}). Regenerating...')
+                        try:
+                            os.remove(features_path)
+                        except OSError as rm_err:
+                            logging.error(
+                                f"Could not remove corrupted cache file {features_path}: {rm_err}")
+                        # 在锁内重新生成
+                        features = self.generate_features(features_path)
+                else:
+                    logging.info(
+                        f'{features_path} not found. Generating features.')
+                    features = self.generate_features(features_path)
+
+                logging.info(f'File lock released for {lock_path}')
+            # 自动释放锁
+
+        except Timeout:
+            logging.error(
+                f"Could not acquire lock for {lock_path} within 60 seconds!")
+            raise RuntimeError(
+                f"Failed to acquire cache lock for {features_path}")
+
+        # 确保 features 被成功赋值
+        if features is None:
+            logging.error(
+                f"Logic error: Features could not be loaded or generated for {features_path}")
+            raise RuntimeError(f"Could not get features for {features_path}")
 
         return features
 
@@ -556,16 +611,20 @@ class Resampler:
         tension = self.flags.get("Ht", 0)
         print(f'breath: {breath}, voicing: {voicing}, tension: {tension}')
         if breath != 100 or voicing != 100 or tension != 0:
-            logging.info('Hb or Hv or Ht flag exists. Split audio into breath, voicing')
+            logging.info(
+                'Hb or Hv or Ht flag exists. Split audio into breath, voicing')
             with torch.no_grad():
                 seg_output = hnsep_model.predict_fromaudio(wave)  # 预测谐波
             breath = np.clip(breath, 0, 500)
             voicing = np.clip(voicing, 0, 150)
             if tension != 0:
                 tension = np.clip(tension, -100, 100)
-                wave = (breath/100)*(wave - seg_output) + pre_emphasis_base_tension((voicing/100)*seg_output, -tension/50)
+                wave = (breath/100)*(wave - seg_output) + \
+                    pre_emphasis_base_tension(
+                        (voicing/100)*seg_output, -tension/50)
             else:
-                wave = (breath/100)*(wave - seg_output) + (voicing/100)*seg_output
+                wave = (breath/100)*(wave - seg_output) + \
+                    (voicing/100)*seg_output
         wave = wave.squeeze(0).squeeze(0).cpu().numpy()
         wave = torch.from_numpy(wave).to(
             dtype=torch.float32, device=Config.device).unsqueeze(0)  # 默认不缩放
@@ -592,7 +651,29 @@ class Resampler:
         logging.info('Saving features.')
 
         features = {'mel_origin': mel_origin, 'scale': scale}
-        np.savez_compressed(features_path, **features)
+
+        # 原子写入
+        temp_suffix = ".tmp"
+        temp_path = features_path.with_suffix(
+            features_path.suffix + temp_suffix)
+
+        try:
+            np.savez_compressed(str(temp_path), **features)
+            os.replace(str(temp_path) + '.npz', str(features_path))
+            logging.info(f'Features saved successfully to {features_path}')
+        except Exception as e:
+            logging.error(
+                f'Error during saving/renaming cache file {features_path}: {e}', exc_info=True)
+
+            if temp_path.exists():
+                try:
+                    os.remove(str(temp_path))
+                    logging.info(
+                        f'Removed temporary file {temp_path} after error.')
+                except OSError as rm_err:
+                    logging.error(
+                        f"Could not remove temporary file {temp_path} after error: {rm_err}")
+            raise
 
         return features
 
@@ -773,7 +854,8 @@ class Resampler:
 
             wav_con = vocoder.spec2wav_torch(mel_render.to(
                 Config.device), f0=f0_render.to(Config.device))
-            render = wav_con[int(new_start * Config.sample_rate):int(new_end * Config.sample_rate)].to('cpu').numpy()
+            render = wav_con[int(new_start * Config.sample_rate)
+                                 :int(new_end * Config.sample_rate)].to('cpu').numpy()
             logging.info(f'cut_l:{int(new_start * Config.sample_rate)}')
             logging.info(
                 f'cut_r:{len(wav_con)-int(new_end * Config.sample_rate)}')
@@ -795,7 +877,8 @@ class Resampler:
             output = ort_session.run(['waveform'], input_data)[0]
             wav_con = output[0]
 
-            render = wav_con[int(new_start * Config.sample_rate):int(new_end * Config.sample_rate)]
+            render = wav_con[int(new_start * Config.sample_rate)
+                                 :int(new_end * Config.sample_rate)]
             logging.info(f'cut_l:{int(new_start * Config.sample_rate)}')
             logging.info(
                 f'cut_r:{len(wav_con)-int(new_end * Config.sample_rate)}')
@@ -848,10 +931,44 @@ class RequestHandler(BaseHTTPRequestHandler):
         post_data = self.rfile.read(content_length)
         post_data_string = post_data.decode('utf-8')
         logging.info(f"post_data_string: {post_data_string}")
-        # try:
-        sliced = split_arguments(post_data_string)
+        try:
+            sliced = split_arguments(post_data_string)
+            in_file_path = Path(sliced[0])
+            out_file_path = Path(sliced[1])
+            note_info_for_log = f"'{in_file_path.stem}' -> '{out_file_path.name}'"
+            logging.info(f"Processing {note_info_for_log} begins...")
 
-        Resampler(*sliced)
+            # === Execute Resampler within try...except ===
+            Resampler(*sliced)
+            # If Resampler completes without exception, it's considered successful *by the server*
+
+            logging.info(f"Processing {note_info_for_log} successful.")
+            self.send_response(200)  # Send 200 OK
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(f"Success: {note_info_for_log}".encode('utf-8'))
+
+        except FileNotFoundError:
+            error_msg = f"Error processing {note_info_for_log}: Input file not found."
+            logging.error(error_msg, exc_info=True)  # Log full traceback
+            self.send_response(404)  # Not Found
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(
+                f"{error_msg}\n{traceback.format_exc()}".encode('utf-8'))
+
+        except Exception:
+            # Catch any other exception during Resampler execution
+            error_msg = f"[Error processing {note_info_for_log}: An internal error occurred."
+            # Log the full traceback for debugging
+            logging.error(error_msg, exc_info=True)
+            self.send_response(500)  # Internal Server Error
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            # Send error details back (optional, consider security if sensitive info might leak)
+            self.wfile.write(
+                f"{error_msg}\n{traceback.format_exc()}".encode('utf-8'))
+
         '''
         except Exception as e:
             trcbk = traceback.format_exc()
@@ -864,7 +981,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         '''
 
 
-def run(server_class=HTTPServer, handler_class=RequestHandler, port=8572):
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    pass
+
+
+def run(server_class=ThreadingHTTPServer, handler_class=RequestHandler, port=8572):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class)
     logging.info(f'Starting http server on port {port}...')
