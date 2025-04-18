@@ -854,8 +854,7 @@ class Resampler:
 
             wav_con = vocoder.spec2wav_torch(mel_render.to(
                 Config.device), f0=f0_render.to(Config.device))
-            render = wav_con[int(new_start * Config.sample_rate)
-                                 :int(new_end * Config.sample_rate)].to('cpu').numpy()
+            render = wav_con[int(new_start * Config.sample_rate)                             :int(new_end * Config.sample_rate)].to('cpu').numpy()
             logging.info(f'cut_l:{int(new_start * Config.sample_rate)}')
             logging.info(
                 f'cut_r:{len(wav_con)-int(new_end * Config.sample_rate)}')
@@ -877,8 +876,7 @@ class Resampler:
             output = ort_session.run(['waveform'], input_data)[0]
             wav_con = output[0]
 
-            render = wav_con[int(new_start * Config.sample_rate)
-                                 :int(new_end * Config.sample_rate)]
+            render = wav_con[int(new_start * Config.sample_rate)                             :int(new_end * Config.sample_rate)]
             logging.info(f'cut_l:{int(new_start * Config.sample_rate)}')
             logging.info(
                 f'cut_r:{len(wav_con)-int(new_end * Config.sample_rate)}')
@@ -891,6 +889,33 @@ class Resampler:
             logging.info(f'render: {render.shape}')
         else:
             raise ValueError(f"Unsupported model type: {Config.model_type}")
+
+        # 添加幅度调制
+        A_flag = self.flags.get('A', 0)
+        if A_flag != 0:
+            logging.info(f'Applying Amplitude Modulation A={A_flag}')
+            A_clamped = np.clip(A_flag, -100, 100)
+
+            if len(pitch_render) > 1 and len(t) > 1:
+                pitch_derivative = np.gradient(pitch_render, t)
+                gain_at_mel_frames = 5**((10**-4) *
+                                         A_clamped * pitch_derivative)
+                num_samples = len(render)
+                audio_time_vector = np.linspace(
+                    new_start, new_end, num=num_samples, endpoint=False)
+
+                interpolated_gain = np.interp(audio_time_vector,
+                                              t,  # Time points for gain_at_mel_frames
+                                              gain_at_mel_frames,
+                                              # Value for time < t[0]
+                                              left=gain_at_mel_frames[0],
+                                              right=gain_at_mel_frames[-1])  # Value for time > t[-1]
+
+                render = render * interpolated_gain
+                logging.info('Amplitude modulation applied.')
+            else:
+                logging.warning(
+                    "Not enough pitch points (>1) to calculate derivative for Amplitude Modulation.")
 
         render = render / scale
         new_max = np.max(np.abs(render))
