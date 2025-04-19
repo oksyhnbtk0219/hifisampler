@@ -144,7 +144,7 @@ class Program
         {
             // Open a command prompt with /K option to keep windows open
             command = "cmd";
-            arguments = $"/K python \"{launcherScriptPath}\"";
+            arguments = $"/C python \"{launcherScriptPath}\"";
         }
         else if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
         {

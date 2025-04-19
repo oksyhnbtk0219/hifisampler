@@ -3,6 +3,8 @@ import os
 import re
 from pathlib import Path  # path manipulation
 import dataclasses
+import sys
+import tempfile
 import traceback
 import yaml
 
@@ -12,7 +14,7 @@ import soundfile as sf  # WAV read + write
 import scipy.interpolate as interp  # Interpolator for feats
 import resampy  # Resampler (as in sampling rate stuff)
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
+from concurrent.futures import ThreadPoolExecutor
 from filelock import FileLock, Timeout
 
 from utils.load_config_from_yaml import load_config_from_yaml
@@ -1006,71 +1008,136 @@ class RequestHandler(BaseHTTPRequestHandler):
         '''
 
 
-class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
-    pass
+class ThreadPoolHTTPServer(HTTPServer):
+    def __init__(self, server_address, RequestHandlerClass, max_workers=16):
+        super().__init__(server_address, RequestHandlerClass)
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        
+    def process_request(self, request, client_address):
+        self.executor.submit(self.process_request_thread, request, client_address)
+        
+    def process_request_thread(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
 
 
-def run(server_class=ThreadingHTTPServer, handler_class=RequestHandler, port=8572):
+def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=16):
     server_address = ('', port)
-    httpd = server_class(server_address, handler_class)
-    logging.info(f'Starting http server on port {port}...')
+    httpd = server_class(server_address, handler_class, max_workers=max_workers)
+    logging.info(f'Starting http server on port {port} with {max_workers} worker threads...')
     httpd.serve_forever()
 
 
 if __name__ == '__main__':
-    if Config.wave_norm:
-        import pyloudnorm as pyln
-    logging.info(f'hachisampler {version}')
+    lock_file_path = Path(tempfile.gettempdir()) / 'server.lock'
 
-    # Load HifiGAN
-    vocoder_path = Path(Config.vocoder_path)
-    onnx_default_path = Path(
-        r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.onnx")
-    ckpt_default_path = Path(
-        r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt")
-    if not vocoder_path.exists():
-        if ckpt_default_path.exists():
-            vocoder_path = ckpt_default_path
-        elif onnx_default_path.exists():
-            vocoder_path = onnx_default_path
-        else:
-            raise FileNotFoundError("No HifiGAN model found.")
+    def cleanup_lock_file():
+        """Ensure the lock file is cleaned up on exit."""
+        if lock_file_path.exists():
+            try:
+                lock_file_path.unlink()
+                logging.info(f"Cleaned up lock file: {lock_file_path}")
+            except Exception as cleanup_error:
+                logging.error(f"Failed to clean up lock file: {cleanup_error}", exc_info=True)
 
-    if vocoder_path.suffix == '.ckpt':
-        from utils.nsf_hifigan import NsfHifiGAN
-        Config.model_type = 'ckpt'
-        vocoder = NsfHifiGAN(model_path=vocoder_path)
-        vocoder.to_device(Config.device)
-        logging.info(f'Loaded HifiGAN: {vocoder}')
-    elif vocoder_path.suffix == '.onnx':
-        import onnxruntime
-        Config.model_type = 'onnx'
-        ort_session = onnxruntime.InferenceSession(str(vocoder_path), providers=[
-                                                   'DmlExecutionProvider', 'CPUExecutionProvider'])
-        logging.info(f'Loaded HifiGAN: {vocoder_path}')
-    else:
-        Config.model_type = vocoder_path.suffix
-        raise ValueError(f'Invalid model type: {Config.model_type}')
-
-    hnsep_model, hnsep_model_args = load_sep_model(
-        Config.hnsep_model_path, Config.device)
-    logging.info(f'Loaded HN-SEP: {Config.hnsep_model_path}')
-
-    melAnalysis = PitchAdjustableMelSpectrogram(
-        sample_rate=Config.sample_rate,
-        n_fft=Config.n_fft,
-        win_length=Config.win_size,
-        hop_length=Config.origin_hop_size,
-        f_min=Config.mel_fmin,
-        f_max=Config.mel_fmax,
-        n_mels=Config.n_mels
-    )
-    # Start server
     try:
-        run()
+        with FileLock(str(lock_file_path), timeout=0.1) as server_lock:
+            logging.info(f"Successfully acquired server lock: {lock_file_path}")
+            logging.info("This process will start the HifiSampler server.")
+
+            global hnsep_model, melAnalysis, vocoder, ort_session
+
+            if Config.wave_norm:
+                try:
+                    import pyloudnorm as pyln
+                    logging.info("pyloudnorm imported for wave normalization.")
+                except ImportError:
+                    logging.warning("pyloudnorm not found, wave normalization disabled.")
+                    Config.wave_norm = False  # Disable if import fails
+
+            logging.info(f'hachisampler {version}')
+
+            # Load HifiGAN
+            vocoder_path = Path(Config.vocoder_path)
+            onnx_default_path = Path(r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.onnx")
+            ckpt_default_path = Path(r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt")
+
+            # Determine actual vocoder path based on existence and defaults
+            actual_vocoder_path = None
+            if vocoder_path.exists():
+                actual_vocoder_path = vocoder_path
+            elif ckpt_default_path.exists():
+                actual_vocoder_path = ckpt_default_path
+                logging.info(f"Configured vocoder path not found, using default: {ckpt_default_path}")
+            elif onnx_default_path.exists():
+                actual_vocoder_path = onnx_default_path
+                logging.info(f"Configured vocoder path not found, using default: {onnx_default_path}")
+            else:
+                # Raise error only if no vocoder can be found at all
+                raise FileNotFoundError(f"No HifiGAN model found. Checked configured path '{Config.vocoder_path}' and defaults.")
+
+            # Load the determined model
+            if actual_vocoder_path.suffix == '.ckpt':
+                from utils.nsf_hifigan import NsfHifiGAN
+                Config.model_type = 'ckpt'
+                vocoder = NsfHifiGAN(model_path=actual_vocoder_path)
+                vocoder.to_device(Config.device)
+                logging.info(f'Loaded HifiGAN (ckpt): {actual_vocoder_path}')
+            elif actual_vocoder_path.suffix == '.onnx':
+                import onnxruntime
+                Config.model_type = 'onnx'
+                # Determine available providers, prioritize DML/CUDA over CPU
+                available_providers = onnxruntime.get_available_providers()
+                preferred_providers = []
+                if 'DmlExecutionProvider' in available_providers:
+                    preferred_providers.append('DmlExecutionProvider')
+                elif 'CUDAExecutionProvider' in available_providers:
+                    preferred_providers.append('CUDAExecutionProvider')
+                preferred_providers.append('CPUExecutionProvider')  # Fallback
+
+                ort_session = onnxruntime.InferenceSession(str(actual_vocoder_path), providers=preferred_providers)
+                logging.info(f'Loaded HifiGAN (onnx): {actual_vocoder_path} using providers {ort_session.get_providers()}')
+            else:
+                Config.model_type = actual_vocoder_path.suffix
+                raise ValueError(f'Invalid model type: {Config.model_type} for path {actual_vocoder_path}')
+
+            # Load HN-SEP model
+            hnsep_model, hnsep_model_args = load_sep_model(
+                Config.hnsep_model_path, Config.device)
+            logging.info(f'Loaded HN-SEP: {Config.hnsep_model_path}')
+
+            # Initialize Mel Spectrogram tool
+            melAnalysis = PitchAdjustableMelSpectrogram(
+                sample_rate=Config.sample_rate,
+                n_fft=Config.n_fft,
+                win_length=Config.win_size,
+                hop_length=Config.origin_hop_size,
+                f_min=Config.mel_fmin,
+                f_max=Config.mel_fmax,
+                n_mels=Config.n_mels
+            )
+            logging.info(f'Initialized Mel Analysis with hop_size={Config.origin_hop_size}.')
+
+            logging.info("Starting the HTTP server...")
+            import signal
+            signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))  # Handle Ctrl+C
+            signal.signal(signal.SIGTERM, lambda sig, frame: sys.exit(0))  # Handle termination signals
+            run()
+            logging.info("Server has stopped.")
+
+    except Timeout:
+        # This block is executed if server_lock.acquire failed (lock already held)
+        logging.info(f"Another instance of the server seems to be running (lock file '{lock_file_path}' is held). Exiting.")
+        sys.exit(0)
+
     except Exception as e:
-        name = e.__class__.__name__
-        if name == 'TypeError':
-            logging.info(help_string)
-        else:
-            raise e
+        # Catch any *other* exception during setup (model loading, etc.)
+        logging.error(f"Failed to initialize or start the server: {e}", exc_info=True)
+        sys.exit(1)  # Exit with error status
+
+    finally:
+        cleanup_lock_file()

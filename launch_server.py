@@ -72,9 +72,8 @@ def start_in_conda_env(config):
                     raise FileNotFoundError(
                         "Could not find activate.bat in PATH or default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH."
                     )
-        # Use cmd /K to keep command prompt open
         command = (
-            f'cmd /K ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
+            f'cmd /C ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
         )
 
     elif sys.platform in ("linux", "linux2", "darwin"):  # Linux or macOS
@@ -117,12 +116,12 @@ def start_in_conda_env(config):
     # Start command prompt
     try:
         if sys.platform == "win32":
-            subprocess.Popen(command, shell=True)
+            subprocess.run(command, shell=True)
         elif sys.platform in ("linux", "linux2", "darwin"):
             if sys.platform == "darwin":
                 terminal = "osascript"
                 script = f'tell application "Terminal" to do script "{command}"'
-                subprocess.Popen([terminal, "-e", script])
+                subprocess.run([terminal, "-e", script])
             else:
                 # Try some mainstream terminal
                 terminals = [
@@ -134,7 +133,7 @@ def start_in_conda_env(config):
                 ]
                 for terminal in terminals:
                     try:
-                        subprocess.Popen([terminal, "-e", command])
+                        subprocess.run([terminal, "-e", command])
                         break
                     except FileNotFoundError:
                         pass
