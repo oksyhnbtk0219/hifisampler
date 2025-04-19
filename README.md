@@ -43,7 +43,7 @@ Pc-nsf-hifigan employs neural networks to upsample the input features, offering 
   * Range: `-100` to `100` | Default: `0`
 * **G:** Force to regenerate feature cache (Ignoring existed cache).  
   * No value needed
-* **Me:** Enable Mel spectrum loop mode.  
+* **He:** Enable Mel spectrum loop mode.  
   * No value needed
 
 _Note: The flags `B` and `V` were renamed to `Hb` and `Hv` respectively because they conflict with other UTAU flags but have different definitions._

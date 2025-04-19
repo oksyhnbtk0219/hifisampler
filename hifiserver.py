@@ -52,7 +52,7 @@ cache_ext = '.hifi.npz'  # cache file extension
 
 # Flags
 flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't',
-         'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'Hv', 'Hb', 'Ht', 'Me']
+         'A', 'B', 'G', 'P', 'S', 'p', 'R', 'D', 'C', 'Z', 'Hv', 'Hb', 'Ht', 'He']
 flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
@@ -745,7 +745,7 @@ class Resampler:
         logging.info(f'length_req: {length_req}')
         logging.info(f'stretch_length: {stretch_length}')
 
-        if Config.loop_mode or "Me" in self.flags.keys():
+        if Config.loop_mode or "He" in self.flags.keys():
             # 添加循环拼接模式
             logging.info('Looping.')
             logging.info(
