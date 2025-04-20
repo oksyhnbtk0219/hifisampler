@@ -17,8 +17,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from concurrent.futures import ThreadPoolExecutor
 from filelock import FileLock, Timeout
 
-from utils.load_config_from_yaml import load_config_from_yaml
-from utils.wav2mel import PitchAdjustableMelSpectrogram
+from util.load_config_from_yaml import load_config_from_yaml
+from util.wav2mel import PitchAdjustableMelSpectrogram
 from hnsep.nets import CascadedNet
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
@@ -1106,7 +1106,7 @@ if __name__ == '__main__':
 
             # Load the determined model
             if actual_vocoder_path.suffix == '.ckpt':
-                from utils.nsf_hifigan import NsfHifiGAN
+                from util.nsf_hifigan import NsfHifiGAN
                 Config.model_type = 'ckpt'
                 vocoder = NsfHifiGAN(model_path=actual_vocoder_path)
                 vocoder.to_device(Config.device)

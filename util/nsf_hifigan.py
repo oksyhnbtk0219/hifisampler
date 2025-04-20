@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.nn import Conv1d, ConvTranspose1d
 from torch.nn.utils import weight_norm, remove_weight_norm
 
-from utils.utils import AttrDict, init_weights, get_padding
+from util.utils import AttrDict, init_weights, get_padding
 
 LRELU_SLOPE = 0.1
 
