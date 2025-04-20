@@ -73,7 +73,7 @@ def start_in_conda_env(config):
                         "Could not find activate.bat in PATH or default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH."
                     )
         command = (
-            f'cmd /K ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
+            f'cmd /C ""{activate_cmd}" {conda_env_name} && python "{python_script_path}""'
         )
 
     elif sys.platform in ("linux", "linux2", "darwin"):  # Linux or macOS
