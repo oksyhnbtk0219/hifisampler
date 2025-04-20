@@ -35,7 +35,7 @@ arguments:
 \tvelocity\tThe consonant velocity of the render.
 
 optional arguments:
-\tflags\t\tThe flags of the render. But now, it's not implemented yet. 
+\tflags\t\tThe flags of the render. But now, it's not implemented yet.
 \toffset\t\tThe offset from the start of the render area of the sample. (default: 0)
 \tlength\t\tThe length of the stretched area in milliseconds. (default: 1000)
 \tconsonant\tThe unstretched area of the render in milliseconds. (default: 0)
@@ -56,6 +56,8 @@ flags = ['fe', 'fl', 'fo', 'fv', 'fp', 've', 'vo', 'g', 't',
 flag_re = '|'.join(flags)
 flag_re = f'({flag_re})([+-]?\\d+)?'
 flag_re = re.compile(flag_re)
+
+server_ready = False
 
 
 @load_config_from_yaml(script_path=Path(__file__))
@@ -429,7 +431,7 @@ class Resampler:
         The UTAU pitchbend parameter.
 
     Methods
-    -------    
+    -------
     render(self):
         The rendering workflow. Immediately starts when class is initialized.
 
@@ -949,11 +951,32 @@ def split_arguments(input_string):
 
 class RequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        logging.info(self.requestline)
-        self.send_response(200)
-        self.end_headers()
+        if server_ready:
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Server Ready')
+            # logging.info("Responded 200 OK to readiness check.") # Optional: Verbose logging
+        else:
+            # 503 Service Unavailable is appropriate
+            self.send_response(503)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Server Initializing')
+            logging.info(
+                "Responded 503 Service Unavailable to readiness check (server not ready).")
+        return
 
     def do_POST(self):
+        if not server_ready:
+            logging.warning(
+                "Received POST request before server was fully ready. Sending 503.")
+            self.send_response(503)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Server initializing, please retry.')
+            return
+        
         content_length = int(self.headers['Content-Length'])
         post_data = self.rfile.read(content_length)
         post_data_string = post_data.decode('utf-8')
@@ -1009,13 +1032,14 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 class ThreadPoolHTTPServer(HTTPServer):
-    def __init__(self, server_address, RequestHandlerClass, max_workers=16):
+    def __init__(self, server_address, RequestHandlerClass, max_workers=8):
         super().__init__(server_address, RequestHandlerClass)
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
-        
+
     def process_request(self, request, client_address):
-        self.executor.submit(self.process_request_thread, request, client_address)
-        
+        self.executor.submit(self.process_request_thread,
+                             request, client_address)
+
     def process_request_thread(self, request, client_address):
         try:
             self.finish_request(request, client_address)
@@ -1025,28 +1049,22 @@ class ThreadPoolHTTPServer(HTTPServer):
             self.shutdown_request(request)
 
 
-def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=16):
+def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=8):
     server_address = ('', port)
-    httpd = server_class(server_address, handler_class, max_workers=max_workers)
-    logging.info(f'Starting http server on port {port} with {max_workers} worker threads...')
+    httpd = server_class(server_address, handler_class,
+                         max_workers=max_workers)
+    logging.info(
+        f'Starting http server on port {port} with {max_workers} worker threads...')
     httpd.serve_forever()
 
 
 if __name__ == '__main__':
     lock_file_path = Path(tempfile.gettempdir()) / 'server.lock'
 
-    def cleanup_lock_file():
-        """Ensure the lock file is cleaned up on exit."""
-        if lock_file_path.exists():
-            try:
-                lock_file_path.unlink()
-                logging.info(f"Cleaned up lock file: {lock_file_path}")
-            except Exception as cleanup_error:
-                logging.error(f"Failed to clean up lock file: {cleanup_error}", exc_info=True)
-
     try:
-        with FileLock(str(lock_file_path), timeout=0.1) as server_lock:
-            logging.info(f"Successfully acquired server lock: {lock_file_path}")
+        with FileLock(str(lock_file_path), timeout=0.5) as server_lock:
+            logging.info(
+                f"Successfully acquired server lock: {lock_file_path}")
             logging.info("This process will start the HifiSampler server.")
 
             global hnsep_model, melAnalysis, vocoder, ort_session
@@ -1056,15 +1074,18 @@ if __name__ == '__main__':
                     import pyloudnorm as pyln
                     logging.info("pyloudnorm imported for wave normalization.")
                 except ImportError:
-                    logging.warning("pyloudnorm not found, wave normalization disabled.")
+                    logging.warning(
+                        "pyloudnorm not found, wave normalization disabled.")
                     Config.wave_norm = False  # Disable if import fails
 
             logging.info(f'hachisampler {version}')
 
             # Load HifiGAN
             vocoder_path = Path(Config.vocoder_path)
-            onnx_default_path = Path(r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.onnx")
-            ckpt_default_path = Path(r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt")
+            onnx_default_path = Path(
+                r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.onnx")
+            ckpt_default_path = Path(
+                r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt")
 
             # Determine actual vocoder path based on existence and defaults
             actual_vocoder_path = None
@@ -1072,13 +1093,16 @@ if __name__ == '__main__':
                 actual_vocoder_path = vocoder_path
             elif ckpt_default_path.exists():
                 actual_vocoder_path = ckpt_default_path
-                logging.info(f"Configured vocoder path not found, using default: {ckpt_default_path}")
+                logging.info(
+                    f"Configured vocoder path not found, using default: {ckpt_default_path}")
             elif onnx_default_path.exists():
                 actual_vocoder_path = onnx_default_path
-                logging.info(f"Configured vocoder path not found, using default: {onnx_default_path}")
+                logging.info(
+                    f"Configured vocoder path not found, using default: {onnx_default_path}")
             else:
                 # Raise error only if no vocoder can be found at all
-                raise FileNotFoundError(f"No HifiGAN model found. Checked configured path '{Config.vocoder_path}' and defaults.")
+                raise FileNotFoundError(
+                    f"No HifiGAN model found. Checked configured path '{Config.vocoder_path}' and defaults.")
 
             # Load the determined model
             if actual_vocoder_path.suffix == '.ckpt':
@@ -1099,11 +1123,14 @@ if __name__ == '__main__':
                     preferred_providers.append('CUDAExecutionProvider')
                 preferred_providers.append('CPUExecutionProvider')  # Fallback
 
-                ort_session = onnxruntime.InferenceSession(str(actual_vocoder_path), providers=preferred_providers)
-                logging.info(f'Loaded HifiGAN (onnx): {actual_vocoder_path} using providers {ort_session.get_providers()}')
+                ort_session = onnxruntime.InferenceSession(
+                    str(actual_vocoder_path), providers=preferred_providers)
+                logging.info(
+                    f'Loaded HifiGAN (onnx): {actual_vocoder_path} using providers {ort_session.get_providers()}')
             else:
                 Config.model_type = actual_vocoder_path.suffix
-                raise ValueError(f'Invalid model type: {Config.model_type} for path {actual_vocoder_path}')
+                raise ValueError(
+                    f'Invalid model type: {Config.model_type} for path {actual_vocoder_path}')
 
             # Load HN-SEP model
             hnsep_model, hnsep_model_args = load_sep_model(
@@ -1120,24 +1147,23 @@ if __name__ == '__main__':
                 f_max=Config.mel_fmax,
                 n_mels=Config.n_mels
             )
-            logging.info(f'Initialized Mel Analysis with hop_size={Config.origin_hop_size}.')
+            logging.info(
+                f'Initialized Mel Analysis with hop_size={Config.origin_hop_size}.')
 
+            server_ready = True
+            logging.info("Server is now marked as ready.")
             logging.info("Starting the HTTP server...")
-            import signal
-            signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))  # Handle Ctrl+C
-            signal.signal(signal.SIGTERM, lambda sig, frame: sys.exit(0))  # Handle termination signals
             run()
             logging.info("Server has stopped.")
 
     except Timeout:
         # This block is executed if server_lock.acquire failed (lock already held)
-        logging.info(f"Another instance of the server seems to be running (lock file '{lock_file_path}' is held). Exiting.")
+        logging.info(
+            f"Another instance of the server seems to be running (lock file '{lock_file_path}' is held). Exiting.")
         sys.exit(0)
 
     except Exception as e:
         # Catch any *other* exception during setup (model loading, etc.)
-        logging.error(f"Failed to initialize or start the server: {e}", exc_info=True)
+        logging.error(
+            f"Failed to initialize or start the server: {e}", exc_info=True)
         sys.exit(1)  # Exit with error status
-
-    finally:
-        cleanup_lock_file()

@@ -10,10 +10,16 @@ using System.Diagnostics;
 
 class Program
 {
-    static readonly HttpClient client = new HttpClient();
-    static readonly int targetPort = 8572;
-    static readonly string launcherScriptName = "launch_server.py"; // Start Python script that starts the server
+    // Static HttpClient for actual POST requests
+    static readonly HttpClient PostClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(180) };
+    // Factory for short-timeout clients for readiness checks
+    static readonly Func<HttpClient> CheckClientFactory = () => new HttpClient() { Timeout = TimeSpan.FromSeconds(2) };
 
+    static readonly int TargetPort = 8572;
+    static readonly string LauncherScriptName = "launch_server.py";
+    private const string ServerStartupMutexName = "Global\\HifiSamplerServerStartupMutex_DCL_8572"; // Unique name for DCL version
+
+    // --- Main Entry Point ---
     static async Task Main(string[] args)
     {
         if (args.Length < 1)
@@ -22,193 +28,392 @@ class Program
             Environment.Exit(1);
         }
 
-        // Trying to dectect the port
-        Console.WriteLine($"[Main] Checking if port {targetPort} is in use...");
-        if (!IsPortInUse(targetPort))
-        {
-            Console.WriteLine($"[Main] Port {targetPort} is not in use. Attempting to launch server.");
+        bool proceedToCommunication = false;
+        bool errorOccurred = false;
+        string errorMessage = "";
 
-        // Get the path for launching the launch_server.py script
-        string exeDirectory = AppContext.BaseDirectory;
-        string launcherScriptPath = Path.Combine(exeDirectory, launcherScriptName);
-
-        if (!File.Exists(launcherScriptPath))
+        // --- Phase 1: Quick Readiness Check (No Lock) ---
+        Console.WriteLine("[Main] Performing initial readiness check (no lock)...");
+        if (await IsServerReady(TargetPort))
         {
-            Console.Error.WriteLine($"[Main] Error: {launcherScriptName} not found at '{launcherScriptPath}'.");
+            Console.WriteLine("[Main] Initial check PASSED. Server is ready.");
+            proceedToCommunication = true;
+        }
+        else
+        {
+            Console.WriteLine("[Main] Initial check FAILED. Server not ready. Proceeding with mutex...");
+
+            // --- Phase 2: Acquire Mutex and Double-Check ---
+            using (var mutex = new Mutex(false, ServerStartupMutexName))
+            {
+                bool mutexAcquired = false;
+                try
+                {
+                    try
+                    {
+                        mutexAcquired = mutex.WaitOne(TimeSpan.FromSeconds(5));
+                    }
+                    catch (AbandonedMutexException)
+                    {
+                        Console.WriteLine("[Main] Warning: Acquired abandoned mutex. Previous owner likely crashed.");
+                        mutexAcquired = true;
+                    }
+
+                    // --- Phase 3: Actions Inside Mutex (if acquired) ---
+                    if (mutexAcquired)
+                    {
+                        Console.WriteLine("[Main] Mutex acquired. Performing second readiness check...");
+
+                        // ** Double-Check **
+                        if (await IsServerReady(TargetPort))
+                        {
+                            Console.WriteLine("[Main] Second check PASSED (inside mutex). Server is ready.");
+                            proceedToCommunication = true; // Mark ready, will skip final wait
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Main] Second check FAILED (inside mutex). Checking port...");
+                            // Server still not ready, check if someone else might be launching it
+                            if (!IsPortInUse(TargetPort))
+                            {
+                                // Port is free - WE MUST LAUNCH
+                                Console.WriteLine($"[Main] Port {TargetPort} is free. This instance will launch the server.");
+                                string exeDir = AppContext.BaseDirectory;
+                                string scriptPath = Path.Combine(exeDir, LauncherScriptName);
+
+                                if (!File.Exists(scriptPath))
+                                {
+                                    errorMessage = $"Error: {LauncherScriptName} not found at '{scriptPath}'.";
+                                    errorOccurred = true;
+                                }
+                                else
+                                {
+                                    try
+                                    {
+                                        LaunchServerLauncher(scriptPath);
+                                        Console.WriteLine("[Main] Launch initiated. Performing initial wait *inside* mutex...");
+
+                                        // Initial wait while holding the lock
+                                        bool initialWaitOk = await WaitForServerToStart(TargetPort, 60, "[InitialWait]");
+                                        if (initialWaitOk)
+                                        {
+                                            Console.WriteLine("[Main] Initial wait successful. Server presumed ready by launcher.");
+                                            proceedToCommunication = true; // Our launch succeeded
+                                        }
+                                        else
+                                        {
+                                            errorMessage = "Server launched by this instance did not become ready during initial wait.";
+                                            errorOccurred = true;
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        errorMessage = $"Error during server launch execution: {ex.Message}";
+                                        errorOccurred = true;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // Port is in use, but not ready. Someone else is launching/initializing.
+                                Console.WriteLine($"[Main] Port {TargetPort} is in use, but server not ready. Assuming another instance is handling it.");
+                                // proceedToCommunication remains false - needs final wait outside lock
+                            }
+                        }
+                    }
+                    else // Mutex not acquired (timed out)
+                    {
+                        Console.WriteLine("[Main] Mutex not acquired (timeout). Assuming another instance handled checks/launch.");
+                        // proceedToCommunication remains false - needs final wait outside lock
+                    }
+                }
+                catch (Exception ex) // Catch unexpected errors during mutex-protected logic
+                {
+                    errorMessage = $"Unexpected error during mutex protected checks: {ex.Message}";
+                    errorOccurred = true;
+                }
+                finally
+                {
+                    if (mutexAcquired)
+                    {
+                        try
+                        {
+                            mutex.ReleaseMutex();
+                            Console.WriteLine("[Main] Mutex released.");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"[Main] CRITICAL: Error releasing mutex: {ex.GetType().Name}");
+                        }
+                    }
+                }
+            } // --- End of using (Mutex) block ---
+        }
+
+        // --- Phase 4: Handle Errors or Perform Final Wait ---
+        if (errorOccurred)
+        {
+            Console.Error.WriteLine($"[Main] Exiting due to critical error: {errorMessage}");
             Environment.Exit(1);
         }
 
-        // Start the script with keep windows open
-        try
+        // Perform final wait ONLY if the server wasn't confirmed ready earlier
+        if (!proceedToCommunication)
         {
-            LaunchServerLauncher(launcherScriptPath);
-            Console.WriteLine("[Main] Waiting for the server to start...");
-            bool serverStarted = false;
-                for (int i = 0; i < 90; i++)
+            Console.WriteLine("[Main] Performing final wait for server readiness confirmation...");
+            bool finalReadinessCheck = await WaitForServerToStart(TargetPort, 95, "[FinalWait]");
+
+            if (!finalReadinessCheck)
             {
-                if (IsPortInUse(targetPort))
+                Console.Error.WriteLine("[Main] Error: Server failed final readiness check.");
+                Environment.Exit(1);
+            }
+            Console.WriteLine("[Main] Final readiness check successful.");
+            proceedToCommunication = true; // Now we can proceed
+        }
+
+        // --- Phase 5: Communicate ---
+        if (proceedToCommunication)
+        {
+            Console.WriteLine("[Main] Proceeding to communication...");
+            await CommunicateWithServer(args);
+            Console.WriteLine("[Main] Task completed successfully.");
+        }
+        else
+        {
+            // Should be unreachable if logic is correct
+            Console.Error.WriteLine("[Main] Error: Logic flaw - Communication attempted without readiness confirmation.");
+            Environment.Exit(1);
+        }
+    }
+
+
+    // --- Communication Function (with Retries) ---
+    // (Keep the CommunicateWithServer function exactly as in the previous final answer)
+    static async Task CommunicateWithServer(string[] args)
+    {
+        int maxRetries = 2;
+        int retryDelayMs = 800;
+        HttpResponseMessage response = null;
+        bool requestSucceeded = false;
+        for (int attempt = 1; attempt <= maxRetries + 1; attempt++)
+        {
+            try
+            {
+                var postFields = string.Join(" ", args);
+                var content = new StringContent(postFields, Encoding.UTF8, "application/x-www-form-urlencoded");
+                Console.WriteLine($"[Communicate] Attempting POST (Attempt {attempt}/{maxRetries + 1})...");
+                response = await PostClient.PostAsync($"http://127.0.0.1:{TargetPort}/", content);
+                if (response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"[Main] Server started on port {targetPort} after {i + 1} seconds.");
-                    serverStarted = true;
+                    Console.WriteLine($"[Communicate] Success (Attempt {attempt}, Status: {(int)response.StatusCode})");
+                    requestSucceeded = true;
                     break;
                 }
                 else
                 {
-                    await Task.Delay(1000);
+                    string responseBody = response.Content == null ? "[No Body]" : await response.Content.ReadAsStringAsync();
+                    Console.Error.WriteLine($"[Communicate] Error (Attempt {attempt}): Server Status: {(int)response.StatusCode} {response.ReasonPhrase}");
+                    Console.Error.WriteLine($"[Communicate] Response Body: {responseBody.Substring(0, Math.Min(responseBody.Length, 500))}{(responseBody.Length > 500 ? "..." : "")}");
+                    if ((response.StatusCode == HttpStatusCode.ServiceUnavailable || response.StatusCode == HttpStatusCode.InternalServerError) && attempt <= maxRetries)
+                    {
+                        Console.WriteLine($"[Communicate] Retrying potential transient error {(int)response.StatusCode}...");
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
             }
-
-            if (!serverStarted)
+            catch (HttpRequestException ex)
             {
-                    Console.Error.WriteLine("[Main] Error: Server did not start within 90 seconds.");
-                Environment.Exit(1);
+                Console.Error.WriteLine($"[Communicate] Network Error (Attempt {attempt}): {ex.Message}");
+            }
+            catch (TaskCanceledException ex)
+            {
+                if (ex.InnerException is TimeoutException || !ex.CancellationToken.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine($"[Communicate] Request Timed Out (Attempt {attempt}).");
+                    break;
+                }
+                else
+                {
+                    Console.Error.WriteLine($"[Communicate] Request Cancelled (Attempt {attempt}): {ex.Message}");
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"[Communicate] Unexpected Error (Attempt {attempt}): {ex.GetType().Name} - {ex.Message}");
+                break;
+            }
+            if (!requestSucceeded && attempt <= maxRetries)
+            {
+                Console.WriteLine($"[Communicate] Waiting {retryDelayMs}ms before retry #{attempt + 1}...");
+                await Task.Delay(retryDelayMs);
             }
         }
-        catch (Exception ex)
+        if (!requestSucceeded)
         {
-            Console.Error.WriteLine($"[Main] Error launching server: {ex.Message}");
+            Console.Error.WriteLine("[Communicate] Failed after all attempts.");
             Environment.Exit(1);
         }
     }
 
-        // Communicate with server (From Straycat original code)
+    // --- Readiness Check Function (GET /) ---
+    // (Keep the IsServerReady function exactly as in the previous final answer)
+    static async Task<bool> IsServerReady(int port)
+    {
+        HttpClient checkClient = null;
         try
         {
-            var postFields = string.Join(" ", args);
-            var content = new StringContent(postFields, Encoding.UTF8, "application/x-www-form-urlencoded");
-
-            HttpResponseMessage response = await client.PostAsync("http://127.0.0.1:8572", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                Console.WriteLine("Success: Straycat Resampled Sucessfully");
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.BadRequest)
-            {
-                Console.Error.WriteLine("Error: StrayCat got an incorrect amount of arguments or the arguments were out of order. Please check the input data before continuing.");
-            }
-            else if (response.StatusCode == System.Net.HttpStatusCode.InternalServerError)
-            {
-                Console.Error.WriteLine($"Error: An Internal Error occured in StraycatServer. Check your voicebank wav files to ensure they are the correct format. More details:\n{await response.Content.ReadAsStringAsync()}");
-            }
-            else
-            {
-                Console.Error.WriteLine($"Error: Straycat returned {response.StatusCode}");
-            }
+            checkClient = CheckClientFactory();
+            HttpResponseMessage response = await checkClient.GetAsync($"http://127.0.0.1:{port}/");
+            return response.StatusCode == HttpStatusCode.OK;
         }
-        catch (HttpRequestException ex)
+        catch
         {
-            Console.Error.WriteLine($"Request exception: {ex.Message}\nIs straycat_server running?");
+            return false;
+        }
+        finally
+        {
+            checkClient?.Dispose();
         }
     }
 
-    // Define port dectecting method
-    static bool IsPortInUse(int port)
+    // --- Wait Function (Polls IsServerReady) ---
+    // (Keep the WaitForServerToStart function exactly as in the previous final answer)
+    static async Task<bool> WaitForServerToStart(int port, int timeoutSeconds, string logPrefix = "[WaitForServer]")
     {
-        try
+        Console.WriteLine($"{logPrefix} Waiting up to {timeoutSeconds}s for server at port {port} to be ready (GET / returns 200 OK)...");
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+        var sw = Stopwatch.StartNew();
+        bool loggedPortInfo = false;
+        while (!cts.IsCancellationRequested)
         {
-            using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+            if (await IsServerReady(port))
             {
-                IAsyncResult result = socket.BeginConnect("127.0.0.1", port, null, null);
-                bool success = result.AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(25)); // Try 25ms
-
-                if (success)
+                Console.WriteLine($"\n{logPrefix} Server became ready after {sw.Elapsed.TotalSeconds:F1}s.");
+                return true;
+            }
+            if (!loggedPortInfo && sw.Elapsed.TotalSeconds > 2)
+            {
+                loggedPortInfo = true;
+                if (IsPortInUse(port))
                 {
-                    socket.EndConnect(result);
-                    return true;
+                    Console.WriteLine($"{logPrefix} Port {port} is open, waiting for application readiness...");
                 }
                 else
                 {
-                    socket.Close(); // Ensure the socket is closed if the connection fails
-                    return false;
+                    Console.WriteLine($"{logPrefix} Port {port} is not open yet...");
                 }
+            }
+            if ((int)sw.Elapsed.TotalSeconds % 5 == 1) Console.Write(".");
+            try
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cts.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
+        Console.WriteLine($"\n{logPrefix} Server did not become ready within {timeoutSeconds}s.");
+        return false;
+    }
+
+    // --- Basic Port Check (Used ONLY inside mutex) ---
+    // (Keep the IsPortInUse function exactly as in the previous final answer)
+    static bool IsPortInUse(int port)
+    {
+        const int timeoutMs = 150;
+        Socket socket = null;
+        try
+        {
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            var result = socket.BeginConnect("127.0.0.1", port, null, null);
+            bool success = result.AsyncWaitHandle.WaitOne(timeoutMs);
+            if (success)
+            {
+                socket.EndConnect(result);
+                return true;
+            }
+            else
+            {
+                return false;
             }
         }
         catch
         {
-            Console.WriteLine($"[IsPortInUse] Port {port} is not in use or an error occurred while checking.");
             return false;
+        }
+        finally
+        {
+            socket?.Close();
+            socket?.Dispose();
         }
     }
 
-    // Define server launcher launching method
+    // --- Server Launcher (Revised for VISIBLE Window - same as previous answer) ---
+    // (Keep the LaunchServerLauncher function exactly as in the previous final answer)
     static void LaunchServerLauncher(string launcherScriptPath)
     {
-        Console.WriteLine($"[LaunchServerLauncher] Attempting to launch server launcher.");
-
-        // Initialize command and arguments based on operating system
-        string command = "";
-        string arguments = "";
-
-        if (OperatingSystem.IsWindows())
+        if (string.IsNullOrEmpty(launcherScriptPath) || !File.Exists(launcherScriptPath))
         {
-            // Open a command prompt with /K option to keep windows open
-            command = "cmd";
-            arguments = $"/C python \"{launcherScriptPath}\"";
+            throw new FileNotFoundException("Launcher script path invalid.", launcherScriptPath);
         }
-        else if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
-        {
-            // Try some other mainstream terminals (Can add more base on need)
-            string[] terminals = { "gnome-terminal", "konsole", "xterm", "terminator", "xfce4-terminal" };
-            bool terminalFound = false; // Use this flag to track if a suitable terminal is found
-
-            foreach (var terminal in terminals)
-            {
-                try
-                {
-                    // Check if the terminal is available
-                    Process.Start(new ProcessStartInfo { FileName = terminal, Arguments = "--version", RedirectStandardOutput = true, UseShellExecute = false }).WaitForExit();
-
-                    command = terminal;
-
-                    if (terminal == "gnome-terminal")
-                    {
-                        arguments = $"-- bash -c \"python '{launcherScriptPath}'; exec bash\"";
-                    }
-                    else
-                    {
-                        arguments = $"-e bash -c \"python '{launcherScriptPath}'; exec bash\"";
-                    }
-                    Console.WriteLine($"[LaunchServerLauncher] Using terminal: {command} {arguments}");
-                    terminalFound = true; // Find a suitable terminal and flip the flag
-                    break;
-                }
-                catch (Exception)
-                {
-                    // Try next option if can find one
-                    continue;
-                }
-            }
-            if (!terminalFound)
-            {
-                throw new Exception("No suitable terminal found.");
-            }
-
-        }
-        else
-        {
-            throw new PlatformNotSupportedException("Unsupported operating system.");
-        }
-
-
-        ProcessStartInfo startInfo = new ProcessStartInfo
-        {
-            FileName = command,
-            Arguments = arguments,
-            UseShellExecute = true, // Run with shell
-            CreateNoWindow = false, // Create new window
-            WorkingDirectory = Path.GetDirectoryName(launcherScriptPath)
-        };
-
-        // Start the process
+        Console.WriteLine($"[LaunchServerLauncher] Attempting launch (visible window): '{launcherScriptPath}'");
+        string command, arguments;
+        string workingDir = Path.GetDirectoryName(launcherScriptPath) ?? ".";
+        bool useShellExecute = false;
         try
         {
-            Process.Start(startInfo);
-            Console.WriteLine($"[LaunchServerLauncher] Server launcher process started.");
+            if (OperatingSystem.IsWindows())
+            {
+                command = "cmd.exe";
+                arguments = $"/C start \"HifiSampler Server\" /D \"{workingDir}\" cmd /C \"title HifiSampler Server & echo Starting server... & python \"{launcherScriptPath}\" & echo. & echo Server process finished. & pause\"";
+                useShellExecute = false;
+                Process.Start(new ProcessStartInfo { FileName = command, Arguments = arguments, WorkingDirectory = workingDir, UseShellExecute = useShellExecute, CreateNoWindow = true });
+            }
+            else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+            {
+                string scriptCmd = $"echo Starting HifiSampler Server... ; python3 \\\"{launcherScriptPath}\\\" || python \\\"{launcherScriptPath}\\\" ; echo ; echo Server process finished. Press Enter to close terminal. ; read -p ''";
+                string bashCmd = $"bash -c '{scriptCmd}'";
+                var terminals = new[] { new { Name = "gnome-terminal", Arg = "--", Cmd = bashCmd }, new { Name = "konsole", Arg = "-e", Cmd = bashCmd }, new { Name = "xfce4-terminal", Arg = "--command", Cmd = bashCmd }, new { Name = "mate-terminal", Arg = "-e", Cmd = bashCmd }, new { Name = "terminator", Arg = "-e", Cmd = bashCmd }, new { Name = "lxterminal", Arg = "-e", Cmd = bashCmd }, new { Name = "xterm", Arg = "-e", Cmd = bashCmd } };
+                bool launched = false;
+                foreach (var term in terminals)
+                {
+                    Process checkProc = null;
+                    try
+                    {
+                        ProcessStartInfo checkPsi = new ProcessStartInfo("which", term.Name) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+                        checkProc = Process.Start(checkPsi);
+                        checkProc?.WaitForExit(500);
+                        if (checkProc?.ExitCode == 0)
+                        {
+                            Console.WriteLine($"[LaunchServerLauncher] Found terminal: {term.Name}. Launching...");
+                            Process.Start(new ProcessStartInfo { FileName = term.Name, Arguments = $"{term.Arg} {term.Cmd}", WorkingDirectory = workingDir, UseShellExecute = true, CreateNoWindow = false });
+                            launched = true;
+                            break;
+                        }
+                    }
+                    catch { }
+                    finally
+                    {
+                        checkProc?.Dispose();
+                    }
+                }
+                if (!launched) throw new NotSupportedException("Could not find supported graphical terminal.");
+            }
+            else
+            {
+                throw new PlatformNotSupportedException("Unsupported OS for launching server window.");
+            }
+            Console.WriteLine($"[LaunchServerLauncher] Server launch command issued.");
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"[LaunchServerLauncher] Error starting server launcher: {ex}");
+            Console.Error.WriteLine($"[LaunchServerLauncher] Launch failure: {ex.Message}");
             throw;
         }
     }
