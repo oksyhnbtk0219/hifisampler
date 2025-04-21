@@ -23,7 +23,7 @@ from hnsep.nets import CascadedNet
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
-version = '0.0.5-hifisampler'
+version = '0.0.6-hifisampler'
 help_string = '''usage: hifisampler in_file out_file pitch velocity [flags] [offset] [length] [consonant] [cutoff] [volume] [modulation] [tempo] [pitch_string]
 
 Resamples using the PC-NSF-HIFIGAN Vocoder.
