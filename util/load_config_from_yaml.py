@@ -18,8 +18,6 @@ def load_config_from_yaml(script_path: Path):
                 with open(config_path, 'r', encoding='utf-8') as f:
                     nested_config = yaml.load(f) or {}
 
-                logging.info(f"Loaded nested config: {nested_config}")
-
                 for section_name, section_data in nested_config.items():
                     if isinstance(section_data, dict):
                         for key, value in section_data.items():
