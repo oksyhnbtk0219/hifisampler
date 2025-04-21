@@ -78,6 +78,7 @@ class Config:
     wave_norm: bool = False
     loop_mode: bool = False
     peak_limit: float = 1.0
+    max_workers: int = 8
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -1032,7 +1033,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
 
 class ThreadPoolHTTPServer(HTTPServer):
-    def __init__(self, server_address, RequestHandlerClass, max_workers=8):
+    def __init__(self, server_address, RequestHandlerClass, max_workers):
         super().__init__(server_address, RequestHandlerClass)
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
@@ -1049,12 +1050,14 @@ class ThreadPoolHTTPServer(HTTPServer):
             self.shutdown_request(request)
 
 
-def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=8):
+def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=1):
     server_address = ('', port)
     httpd = server_class(server_address, handler_class,
                          max_workers=max_workers)
     logging.info(
-        f'Starting http server on port {port} with {max_workers} worker threads...')
+        f'Listening on port {port} with {max_workers} worker threads...')
+    global server_ready
+    server_ready = True
     httpd.serve_forever()
 
 
@@ -1114,6 +1117,7 @@ if __name__ == '__main__':
             elif actual_vocoder_path.suffix == '.onnx':
                 import onnxruntime
                 Config.model_type = 'onnx'
+                Config.max_workers = 1
                 # Determine available providers, prioritize DML/CUDA over CPU
                 available_providers = onnxruntime.get_available_providers()
                 preferred_providers = []
@@ -1150,10 +1154,8 @@ if __name__ == '__main__':
             logging.info(
                 f'Initialized Mel Analysis with hop_size={Config.origin_hop_size}.')
 
-            server_ready = True
-            logging.info("Server is now marked as ready.")
             logging.info("Starting the HTTP server...")
-            run()
+            run(max_workers=Config.max_workers)
             logging.info("Server has stopped.")
 
     except Timeout:
