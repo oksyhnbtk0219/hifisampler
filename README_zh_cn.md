@@ -1,10 +1,12 @@
 # hifisampler
 
+[中文文档](README_zh_cn.md) | [English Document](README.md)
+
 一个基于 [pc-nsf-hifigan](https://github.com/openvpi/vocoders)的新的 utau 重采样器。
 
 ## 为什么叫 hifisampler?
 
-hifisampler 是由[straycatresampler](https://github.com/UtaUtaUtau/straycat) 修改而来，用 pc-nsf-hifigan 替换了原来的 world
+hifisampler 是由 [straycatresampler](https://github.com/UtaUtaUtau/straycat) 修改而来，用 pc-nsf-hifigan 替换了原来的 world。
 
 ## pc-nsf-hifigan 和其它传统 vocoder 有什么不同?
 
@@ -12,6 +14,46 @@ pc-nsf-hifigan 采用神经网络对输入的特征进行上采样，音质比�
 pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配的 f0，因此可以用于 utau 的重采样。
 
 ## 如何使用?
+
+提供三种安装方式，按自己需要和喜好选择。
+
+### 使用环境整合包（推荐 NVIDIA GPU）
+
+1. 下载最新的 [release](https://github.com/mtfotto/hifimisampler/releases) 整合包并解压，运行`start.bat` 启动渲染服务。
+2. （可选）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
+
+   ```cmd
+   mklink "C:\[OpenUTAU路径]\Resamplers\hifisampler.exe" "C:\[项目路径]\hifisampler.exe"
+   ```
+
+3. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
+
+### 使用 uv 手动安装
+
+0. 安装 uv，安装方法请参考 [uv 文档](https://docs.astral.sh/uv/getting-started/installation/)。
+1. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 源码并解压，进入文件夹。
+2. 使用 uv 安装依赖，输入
+
+   ```bash
+   uv sync
+   ```
+
+3. 在 config.yaml 中填入配置（如果是首次使用，则在 config.default.yaml 中修改，首次运行时会自动生成 config.yaml 文件）。
+4. （可选）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
+
+   ```cmd
+   mklink "C:\[OpenUTAU路径]\Resamplers\hifisampler.exe" "C:\[项目路径]\hifisampler.exe"
+   ```
+
+5. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
+
+   ```bash
+   uv run hifiserver.py
+   ```
+
+6. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
+
+### 使用 conda 手动安装
 
 0. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 解压，进入文件夹，如果有嵌套的话继续打开直到显示有 hifiserver.py 文件。
 
@@ -30,25 +72,24 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
    即可进入虚拟环境。虚拟环境只需创建一次，以后直接进入有 hifiserver.py 的文件夹打开终端输入 activate 命令即可  
    进入成功后会发现终端工作目录前面有 ( hifisamper ) 标志  
    如果报错说 conda 不是内部外部命令，是环境变量没设置好，搜索： conda 设置环境变量，按要求操作即可
+
 2. 安装依赖，输入
 
-   ``` bash
+   ```bash
    pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
    ```
 
 3. 在 [torch 官网] (<https://pytorch.org/>) 下载 cuda 版本的 pytorch ( 如果你确定只使用 onnx 版，那么可以下载 cpu 版的 pytorch )
    具体安装方法：进入后往下滑，看到 INSTALL PYTORCH 以及一个表格，PyTorch Build 选 Stable , Your OS 选你的操作系统 , Package 选 pip , Language 选 python , Compute Platform 如果要下载 gpu 版就选带 cuda 的，下载 cpu 版选 cpu ，然后复制 Run this Command 右边表格里的命令到终端运行
 4. 在 config.yaml 中填入对应路径信息，如果是首次使用，则在 config.default.yaml 中修改，首次运行时会自动生成 config.yaml 文件。 (需要将 config.default.yaml ，hifiserver.py ， hifisampler.exe 以及 launch_server.py 四个文件放在同一目录下。建议解压后保持原文件结构不变)
-5. 每次使用前运行 'hifiserver.py'。
-   在终端输入
+5. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
 
    ```bash
    conda activate hifisampler
    python hifiserver.py
    ```
 
-   _若已设置好配置文件则每次使用时这一步可跳过_
-6. 将 utau 的重采样器设置为 `hifisampler.exe`
+6. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
 
 ## 已实现的 flags
 
@@ -60,11 +101,11 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
   - 范围: `0` 到 `150` | 默认: `100`
 - **P:** 以 -16 LUFS 为基准进行音符粒度的响度标准化。需要在 config.yaml 中设置 `wave_norm` 为 `true`。
   - 范围: `0` 到 `100` | 默认: `100`
-- **t:** 移动特定的音高，单位为音分，1分=1/100个半音。
+- **t:** 移动特定的音高，单位为音分，1 分=1/100 个半音。
   - 范围: `-1200` 到 `1200` | 默认: `0`
 - **Ht:** 调整张力。
   - 范围: `-100` 到 `100` | 默认: `0`
-- **A** 根据音高的变化调制振幅，有助于生成相对真实的颤音。
+- **A:** 根据音高的变化调制振幅，有助于生成相对真实的颤音。
   - 范围: `-100` 到 `100` | 默认: `0`
 - **G:** 强制重新生成特征缓存（忽略已有缓存）。
   - 无需数值
