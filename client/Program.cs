@@ -16,7 +16,8 @@ class Program
     static readonly Func<HttpClient> CheckClientFactory = () => new HttpClient() { Timeout = TimeSpan.FromSeconds(2) };
 
     static readonly int TargetPort = 8572;
-    static readonly string LauncherScriptName = "launch_server.py";
+    // start.bat for Windows, start.sh for Linux/Mac
+    static readonly string LauncherScriptName = OperatingSystem.IsWindows() ? "start.bat" : "start.sh";
     private const string ServerStartupMutexName = "Global\\HifiSamplerServerStartupMutex_DCL_8572"; // Unique name for DCL version
 
     // --- Main Entry Point ---
@@ -371,13 +372,13 @@ class Program
             if (OperatingSystem.IsWindows())
             {
                 command = "cmd.exe";
-                arguments = $"/C start \"HifiSampler Server\" /D \"{workingDir}\" cmd /C \"title HifiSampler Server & echo Starting server... & python \"{launcherScriptPath}\" & echo. & echo Server process finished. & pause\"";
+                arguments = $"/C start \"HifiSampler Server\" /D \"{workingDir}\" cmd /C \"title HifiSampler Server & echo Starting server... & \"{launcherScriptPath}\" & echo. & echo Server process finished. & pause\"";
                 useShellExecute = false;
                 Process.Start(new ProcessStartInfo { FileName = command, Arguments = arguments, WorkingDirectory = workingDir, UseShellExecute = useShellExecute, CreateNoWindow = true });
             }
             else if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
             {
-                string scriptCmd = $"echo Starting HifiSampler Server... ; python3 \\\"{launcherScriptPath}\\\" || python \\\"{launcherScriptPath}\\\" ; echo ; echo Server process finished. Press Enter to close terminal. ; read -p ''";
+                string scriptCmd = $"echo Starting HifiSampler Server... ; \\\"{launcherScriptPath}\\\" ; echo ; echo Server process finished. Press Enter to close terminal. ; read -p ''";
                 string bashCmd = $"bash -c '{scriptCmd}'";
                 var terminals = new[] { new { Name = "gnome-terminal", Arg = "--", Cmd = bashCmd }, new { Name = "konsole", Arg = "-e", Cmd = bashCmd }, new { Name = "xfce4-terminal", Arg = "--command", Cmd = bashCmd }, new { Name = "mate-terminal", Arg = "-e", Cmd = bashCmd }, new { Name = "terminator", Arg = "-e", Cmd = bashCmd }, new { Name = "lxterminal", Arg = "-e", Cmd = bashCmd }, new { Name = "xterm", Arg = "-e", Cmd = bashCmd } };
                 bool launched = false;

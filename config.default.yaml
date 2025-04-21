@@ -1,5 +1,6 @@
 version: 0.0.5
 env:
+  # if you are using venv, you don't need to set `conda_base_path` and `conda_env_name`.
   conda_base_path: "C:/Users/YourUsername/Miniconda3"
   conda_env_name: "hifisampler"
   python_script_path: "./hifiserver.py"

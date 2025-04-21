@@ -35,24 +35,60 @@ def get_default_conda_base_path():
     return None
 
 
+def start_in_venv(venv_path, python_script_path):
+    """Start the script using venv."""
+    venv_path = Path(venv_path)
+    python_script_path = Path(python_script_path)
+
+    if sys.platform == "win32":
+        python_exe = venv_path / "Scripts" / "python.exe"
+    else:
+        python_exe = venv_path / "bin" / "python"
+
+    if not python_exe.exists():
+        raise FileNotFoundError(
+            f"Python executable not found in virtual environment: {python_exe}")
+    
+    if not python_script_path.exists():
+         raise FileNotFoundError(
+            f"Target Python script not found: {python_script_path}")
+
+    command = [str(python_exe), str(python_script_path)]
+    print(f"Attempting to run command: {' '.join(command)}")
+
+
+    try:
+        subprocess.run(command, check=True)
+        return True
+    except Exception as e:
+        print(f"Error starting script in venv: {e}")
+        return False
+
+
 def start_in_conda_env(config):
     conda_env_name = config["conda_env_name"]
     python_script_path = config["python_script_path"]
-    conda_base_path = config.get("conda_base_path")  # Use get method to allow conda_base_path as empty
+    # Use get method to allow conda_base_path as empty
+    conda_base_path = config.get("conda_base_path")
 
     # Choose how to find conda path based on operating system
     if sys.platform == "win32":  # Windows
         if conda_base_path:
-            activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
+            activate_cmd = os.path.join(
+                conda_base_path, "Scripts", "activate.bat")
             if not os.path.exists(activate_cmd):
-                print(f"Warning: activate.bat not found at: {activate_cmd}. Trying to find default conda path.")
+                print(
+                    f"Warning: activate.bat not found at: {activate_cmd}. Trying to find default conda path.")
                 conda_base_path = get_default_conda_base_path()
                 if conda_base_path:
-                    activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
+                    activate_cmd = os.path.join(
+                        conda_base_path, "Scripts", "activate.bat")
                     if not os.path.exists(activate_cmd):
-                        raise FileNotFoundError(f"activate.bat not found at: {activate_cmd}. Please check conda installation.")
+                        raise FileNotFoundError(
+                            f"activate.bat not found at: {activate_cmd}. Please check conda installation.")
                 else:
-                    raise FileNotFoundError("Could not find default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH.")
+                    raise FileNotFoundError(
+                        "Could not find default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH.")
         else:
             # Try to find conda from PATH
             activate_cmd = None
@@ -62,12 +98,15 @@ def start_in_conda_env(config):
                     activate_cmd = possible_path
                     break
             if activate_cmd is None:
-                print("Warning: Could not find activate.bat in PATH. Trying to find default conda path.")
+                print(
+                    "Warning: Could not find activate.bat in PATH. Trying to find default conda path.")
                 conda_base_path = get_default_conda_base_path()
                 if conda_base_path:
-                    activate_cmd = os.path.join(conda_base_path, "Scripts", "activate.bat")
+                    activate_cmd = os.path.join(
+                        conda_base_path, "Scripts", "activate.bat")
                     if not os.path.exists(activate_cmd):
-                        raise FileNotFoundError(f"activate.bat not found at: {activate_cmd}. Please check conda installation.")
+                        raise FileNotFoundError(
+                            f"activate.bat not found at: {activate_cmd}. Please check conda installation.")
                 else:
                     raise FileNotFoundError(
                         "Could not find activate.bat in PATH or default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH."
@@ -80,14 +119,17 @@ def start_in_conda_env(config):
         if conda_base_path:
             conda_bin = os.path.join(conda_base_path, "bin", "conda")
             if not os.path.exists(conda_bin):
-                print(f"Warning: conda not found at: {conda_bin}. Trying to find default conda path.")
+                print(
+                    f"Warning: conda not found at: {conda_bin}. Trying to find default conda path.")
                 conda_base_path = get_default_conda_base_path()
                 if conda_base_path:
                     conda_bin = os.path.join(conda_base_path, "bin", "conda")
                     if not os.path.exists(conda_bin):
-                        raise FileNotFoundError(f"conda not found at: {conda_bin}. Please check conda installation.")
+                        raise FileNotFoundError(
+                            f"conda not found at: {conda_bin}. Please check conda installation.")
                 else:
-                    raise FileNotFoundError("Could not find default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH.")
+                    raise FileNotFoundError(
+                        "Could not find default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH.")
         else:
             # Try to find conda from PATH
             conda_bin = None
@@ -97,12 +139,14 @@ def start_in_conda_env(config):
                     conda_bin = possible_path
                     break
             if conda_bin is None:
-                print("Warning: Could not find conda in PATH. Trying to find default conda path.")
+                print(
+                    "Warning: Could not find conda in PATH. Trying to find default conda path.")
                 conda_base_path = get_default_conda_base_path()
                 if conda_base_path:
                     conda_bin = os.path.join(conda_base_path, "bin", "conda")
                     if not os.path.exists(conda_bin):
-                        raise FileNotFoundError(f"conda not found at: {conda_bin}. Please check conda installation.")
+                        raise FileNotFoundError(
+                            f"conda not found at: {conda_bin}. Please check conda installation.")
                 else:
                     raise FileNotFoundError(
                         "Could not find conda in PATH or default conda installation. Please specify conda_base_path in config.yaml or ensure conda is in your PATH."
@@ -147,6 +191,21 @@ def start_in_conda_env(config):
         return False
 
     return True
+
+
+def start_environment(config):
+    """Determine whether to use venv or conda and start the script."""
+    python_script_path = config["python_script_path"]
+    venv_path = Path(".venv")
+
+    # Check for .venv folder
+    print("Starting server...")
+    if venv_path.exists() and venv_path.is_dir():
+        print("Detected .venv folder. Attempting to start script using venv...")
+        return start_in_venv(str(venv_path), python_script_path)
+    else:
+        print(".venv folder not found. Falling back to Conda environment...")
+        return start_in_conda_env(config)
 
 
 if __name__ == "__main__":
@@ -214,9 +273,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # Call the function
-    if start_in_conda_env(env_config):
+    if start_environment(env_config):
         print(
-            f"Successfully attempted to start '{script_path_str}' in Conda environment '{env_config['conda_env_name']}'."
+            f"Successfully attempted to start '{script_path_str}' in the appropriate environment."
         )
     else:
         print("Failed to start the script.")

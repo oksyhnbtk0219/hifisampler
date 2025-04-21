@@ -5,9 +5,11 @@
 *.nupkg
 *.user
 *.suo
+*.sln
 *.vs/
 .vs/
 TestResults/
+Properties/
 *.log
 *.tmp
 *.bak
@@ -19,5 +21,6 @@ x86/
 publish/
 .idea/
 .vscode/
+.venv/
 __pycache__/
 config.yaml
