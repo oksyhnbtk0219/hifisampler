@@ -114,6 +114,10 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 
 _注：由于 `B` 和 `V` 与其他 UTAU flags 名称冲突但定义不同，因此分别更名为 `Hb` 和 `Hv`。_
 
+## 其他注意事项
+
+- 如果采用服务端自启动（实验性），在服务器启动过程中关闭终端窗口或渲染，可能导致服务端卡住，可以尝试手动解除 `hifisampler.exe` 的文件占用。推荐手动使用 `./start.bat` 启动渲染服务。
+
 ## 感谢
 
 - [yjzxkxdn](https://github.com/yjzxkxdn)

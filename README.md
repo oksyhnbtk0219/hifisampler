@@ -90,6 +90,10 @@ Three installation methods are provided; choose the one that best suits your nee
 
 _Note: The flags `B` and `V` were renamed to `Hb` and `Hv` respectively because they conflict with other UTAU flags but have different definitions._
 
+## Other Notes
+
+- If using server-side auto-start (Experimental), closing the terminal window or rendering process during server startup may cause the server to freeze. You can try manually releasing the file lock on `hifisampler.exe`. We recommend manually starting the rendering service using `./start.bat` to avoid issues.
+
 ## Acknowledgments
 
 - [yjzxkxdn](https://github.com/yjzxkxdn)
