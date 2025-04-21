@@ -3,7 +3,7 @@ name = "hifisampler"
 version = "0.0.5"
 description = "A new UTAU resampler based on pc-nsf-hifigan and straycatresampler for virtual singer."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.10, <3.11"
 dependencies = [
     "filelock>=3.17.0",
     "librosa>=0.10.2.post1",
