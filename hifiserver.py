@@ -618,8 +618,86 @@ class Resampler:
         if breath != 100 or voicing != 100 or tension != 0:
             logging.info(
                 'Hb or Hv or Ht flag exists. Split audio into breath, voicing')
-            with torch.no_grad():
-                seg_output = hnsep_model.predict_fromaudio(wave)  # 预测谐波
+
+            hnsep_cache_path = self.in_file.with_name(
+                f'{self.in_file.stem}_hnsep')
+            lock_path = str(hnsep_cache_path) + ".lock"
+            lock_hnsep = FileLock(lock_path, timeout=60)  # 设置60秒超时
+            
+            seg_output = None  # 初始化 features 变量
+            re_generate_hnsep = True
+            try:
+                with lock_hnsep:
+                    force_generate = 'G' in self.flags.keys()
+
+                    if force_generate:
+                        logging.info('G flag exists. Forcing hnsep feature generation.')
+                        with torch.no_grad():
+                            seg_output = hnsep_model.predict_fromaudio(wave)  # 预测谐波
+                    elif hnsep_cache_path.exists():
+                        try:
+                            seg_output = torch.load(str(hnsep_cache_path), map_location=Config.device)
+                            logging.info('Cache loaded seg_output successfully.')
+                            re_generate_hnsep = False
+                        except (EOFError, OSError, ValueError) as e:
+                            logging.warning(
+                                f'Failed to load cache {hnsep_cache_path} ({type(e).__name__}: {e}). Regenerating...')
+                            try:
+                                os.remove(hnsep_cache_path)
+                            except OSError as rm_err:
+                                logging.error(
+                                    f"Could not remove corrupted cache file {hnsep_cache_path}: {rm_err}")
+                            # 在锁内重新生成
+                            with torch.no_grad():
+                                seg_output = hnsep_model.predict_fromaudio(wave)
+                    else:
+                        logging.info(
+                            f'{hnsep_cache_path} not found. Generating features.')
+                        with torch.no_grad():
+                            seg_output = hnsep_model.predict_fromaudio(wave)
+                    
+                    if re_generate_hnsep:
+                        
+                        # 原子写入
+                        temp_suffix = ".hnsep_tmp"
+                        temp_path = hnsep_cache_path.with_suffix(
+                            hnsep_cache_path.suffix + temp_suffix)
+                        print("temp_path:",temp_path)
+
+                        try:
+                            #np.savez_compressed(str(temp_path), **features)
+                            torch.save(seg_output, str(temp_path))
+                            os.replace(str(temp_path), str(hnsep_cache_path))
+                            logging.info(f'Hnsep features saved successfully to {hnsep_cache_path}')
+                        except Exception as e:
+                            logging.error(
+                                f'Error during saving/renaming cache file {hnsep_cache_path}: {e}', exc_info=True)
+
+                            if temp_path.exists():
+                                try:
+                                    os.remove(str(temp_path))
+                                    logging.info(
+                                        f'Removed temporary file {temp_path} after error.')
+                                except OSError as rm_err:
+                                    logging.error(
+                                        f"Could not remove temporary file {temp_path} after error: {rm_err}")
+                            raise
+                        
+                    logging.info(f'File lock released for {lock_path}')
+                # 自动释放锁
+
+            except Timeout:
+                logging.error(
+                    f"Could not acquire lock for {lock_path} within 60 seconds!")
+                raise RuntimeError(
+                    f"Failed to acquire cache lock for {seg_output}")
+
+            # 确保 seg_output 被成功赋值
+            if seg_output is None:
+                logging.error(
+                    f"Logic error: Features could not be loaded or generated for {hnsep_cache_path}")
+                raise RuntimeError(f"Could not get features for {hnsep_cache_path}")
+
             breath = np.clip(breath, 0, 500)
             voicing = np.clip(voicing, 0, 150)
             if tension != 0:
