@@ -759,6 +759,7 @@ class Resampler:
             raise
 
         return features
+
     def resample(self, features):
         """
         Renders a WAV file using the passed MEL features.
