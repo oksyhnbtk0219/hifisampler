@@ -21,7 +21,7 @@ Three installation methods are provided; choose the one that best suits your nee
 ### Using Integrated Environment Package (Recommended for NVIDIA GPU)
 
 1. Download the latest [release](https://github.com/mtfotto/hifimisampler/releases) package and extract it. Run `start.bat` to start the rendering service.
-2. (Optional) For server auto-start (experimental), ensure that `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` are in the same directory. It's recommended to keep the original file structure after extraction. OpenUTAU users can use a symbolic link to link `hifisampler.exe` to the Resamplers folder.
+2. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
 
    ```cmd
    mklink "C:\[OpenUTAU Path]\Resamplers\hifisampler.exe" "C:\[Project Path]\hifisampler.exe"
@@ -31,28 +31,40 @@ Three installation methods are provided; choose the one that best suits your nee
 
 ### Manual Installation using uv
 
-0. Install uv. Refer to the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) for installation instructions.
-1. Download the [release](https://github.com/mtfotto/hifimisampler/releases) source code and extract it. Navigate into the extracted folder.
-2. Use uv to install the dependencies. Enter:
+0. Install `uv` following the instructions in the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/).
+1. Download and extract the source code from the [latest release](https://github.com/mtfotto/hifimisampler/releases). Then, navigate into the extracted folder.
+2. Fill in the configuration details in `config.yaml`. If this is your first time using the software, modify `config.default.yaml` instead. The `config.yaml` file will be automatically generated upon the first run.
+3. Depending on your hardware, you can select a suitable CUDA version for acceleration. To do this, modify the `tool.uv.sources` section in `pyproject.toml`. For example, to enable CUDA acceleration:
 
-   ```bash
-   uv sync
+   ```toml
+   [tool.uv.sources]
+   torch = [
+      { index = "pytorch-cu124" },
+   ]
    ```
 
-3. Fill in the configuration in `config.yaml` (if it's your first time, modify `config.default.yaml`; then `config.yaml` will be automatically generated on the first run).
-4. (Optional) For server auto-start (experimental), ensure that `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` are in the same directory. It's recommended to keep the original file structure after extraction. OpenUTAU users can use a symbolic link to link `hifisampler.exe` to the Resamplers folder.
+    If you're using the CPU version, set it as follows:
+  
+    ```toml
+    [tool.uv.sources]
+     torch = [
+         { index = "pytorch-cpu" },
+     ]
+    ```
+
+4. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
 
    ```cmd
    mklink "C:\[OpenUTAU Path]\Resamplers\hifisampler.exe" "C:\[Project Path]\hifisampler.exe"
    ```
 
-5. Run `hifiserver.py` before each use to start the rendering service. If using server auto-start (experimental), you can skip this step. Enter the following in the terminal:
+5. Before each use, run `hifiserver.py` to start the rendering service. If you're using the experimental server auto-start feature, you can skip this step. Enter the following command in your terminal:
 
    ```bash
    uv run hifiserver.py
    ```
 
-6. Set the UTAU resampler to `hifisampler.exe` and ensure the rendering service is running.
+6. Set the resampler in UTAU to `hifisampler.exe` and ensure the rendering service is running.
 
 ### Manual Installation using conda/pip
 
@@ -63,7 +75,12 @@ Three installation methods are provided; choose the one that best suits your nee
    ```
 
 2. Download the CUDA version of PyTorch from the Torch website (If you're certain about only using the ONNX version, then downloading the CPU version of PyTorch is fine).
-3. Fill the corresponding path information in `config.yaml`. If it's your first time using the program, modify the settings in `config.default.yaml`. The `config.yaml` file will be automatically generated upon the first run. (You need to place `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It is recommended to keep the original file structure unchanged after unpacking.)
+3. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
+
+   ```cmd
+   mklink "C:\[OpenUTAU Path]\Resamplers\hifisampler.exe" "C:\[Project Path]\hifisampler.exe"
+   ```
+
 4. Download the [release](https://github.com/openhachimi/hifisampler/releases), unzip it, and run 'hifiserver.py'.
 5. Set UTAU's resampler to `hifisampler.exe`.
 

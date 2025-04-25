@@ -22,5 +22,6 @@ publish/
 .idea/
 .vscode/
 .venv/
+venv/
 __pycache__/
 config.yaml
