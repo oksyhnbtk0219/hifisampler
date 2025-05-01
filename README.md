@@ -20,7 +20,7 @@ Three installation methods are provided; choose the one that best suits your nee
 
 ### Using Integrated Environment Package (Recommended for NVIDIA GPU)
 
-1. Download the latest [release](https://github.com/openhachimi/hifimisampler/releases) package and extract it. Run `start.bat` to start the rendering service.
+1. Download the latest [release](https://github.com/openhachimi/hifisampler/releases) package and extract it. Run `start.bat` to start the rendering service.
 2. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
 
    ```cmd
@@ -32,7 +32,7 @@ Three installation methods are provided; choose the one that best suits your nee
 ### Manual Installation using uv
 
 0. Install `uv` following the instructions in the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/).
-1. Download and extract the source code from the [latest release](https://github.com/openhachimi/hifimisampler/releases). Then, navigate into the extracted folder.
+1. Download and extract the source code from the [latest release](https://github.com/openhachimi/hifisampler/releases). Then, navigate into the extracted folder.
 2. Fill in the configuration details in `config.yaml`. If this is your first time using the software, modify `config.default.yaml` instead. The `config.yaml` file will be automatically generated upon the first run.
 3. Depending on your hardware, you can select a suitable CUDA version for acceleration. To do this, modify the `tool.uv.sources` section in `pyproject.toml`. For example, to enable CUDA acceleration:
 
