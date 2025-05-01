@@ -19,7 +19,7 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 
 ### 使用环境整合包（推荐 NVIDIA GPU）
 
-1. 下载最新的 [release](https://github.com/mtfotto/hifimisampler/releases) 整合包并解压，运行`start.bat` 启动渲染服务。
+1. 下载最新的 [release](https://github.com/openhachimi/hifimisampler/releases) 整合包并解压，运行`start.bat` 启动渲染服务。
 2. （可选但不推荐）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
 
    ```cmd
@@ -31,7 +31,7 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 ### 使用 uv 手动安装
 
 0. 安装 uv，安装方法请参考 [uv 文档](https://docs.astral.sh/uv/getting-started/installation/)。
-1. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 源码并解压，进入文件夹。
+1. 下载 [release](https://github.com/openhachimi/hifimisampler/releases) 源码并解压，进入文件夹。
 2. 在 config.yaml 中填入配置（如果是首次使用，则在 config.default.yaml 中修改，首次运行时会自动生成 config.yaml 文件）。
 3. 根据个人需求，可以选择适合自己硬件的 cuda 版本以获取加速，具体而言，在 `pyproject.toml` 中，如果需要 cuda 加速，则需要修改配置文件的 `tool.uv.sources` 部分，如：
 
@@ -67,7 +67,7 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 
 ### 使用 conda 手动安装
 
-0. 下载 [release](https://github.com/mtfotto/hifimisampler/releases) 解压，进入文件夹，如果有嵌套的话继续打开直到显示有 hifiserver.py 文件。
+0. 下载 [release](https://github.com/openhachimi/hifimisampler/releases) 解压，进入文件夹，如果有嵌套的话继续打开直到显示有 hifiserver.py 文件。
 
 1. 安装 miniconda ，安装好后在刚刚打开的文件夹右击，点在终端中打开，输入
 
