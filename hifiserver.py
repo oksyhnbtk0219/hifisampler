@@ -1192,6 +1192,7 @@ if __name__ == '__main__':
                 vocoder = NsfHifiGAN(model_path=actual_vocoder_path)
                 vocoder.to_device(Config.device)
                 logging.info(f'Loaded HifiGAN (ckpt): {actual_vocoder_path}')
+                logging.info(f'Using device: {Config.device}')
             elif actual_vocoder_path.suffix == '.onnx':
                 import onnxruntime
                 Config.model_type = 'onnx'
@@ -1209,6 +1210,7 @@ if __name__ == '__main__':
                     str(actual_vocoder_path), providers=preferred_providers)
                 logging.info(
                     f'Loaded HifiGAN (onnx): {actual_vocoder_path} using providers {ort_session.get_providers()}')
+                logging.info(f'Using provider: {ort_session.get_providers()[0]}')
             else:
                 Config.model_type = actual_vocoder_path.suffix
                 raise ValueError(
