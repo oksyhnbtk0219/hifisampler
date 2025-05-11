@@ -33,8 +33,9 @@ Three installation methods are provided; choose the one that best suits your nee
 
 0. Install `uv` following the instructions in the [uv documentation](https://docs.astral.sh/uv/getting-started/installation/).
 1. Download and extract the source code from the [latest release](https://github.com/openhachimi/hifisampler/releases). Then, navigate into the extracted folder.
-2. Fill in the configuration details in `config.yaml`. If this is your first time using the software, modify `config.default.yaml` instead. The `config.yaml` file will be automatically generated upon the first run.
-3. Depending on your hardware, you can select a suitable CUDA version for acceleration. To do this, modify the `tool.uv.sources` section in `pyproject.toml`. For example, to enable CUDA acceleration:
+2. Download model files from release assets. Unzip and place it in the project folder.
+3. Fill in the configuration details in `config.yaml`. If this is your first time using the software, modify `config.default.yaml` instead. The `config.yaml` file will be automatically generated upon the first run.
+4. Depending on your hardware, you can select a suitable CUDA version for acceleration. To do this, modify the `tool.uv.sources` section in `pyproject.toml`. For example, to enable CUDA acceleration:
 
    ```toml
    [tool.uv.sources]
@@ -52,19 +53,19 @@ Three installation methods are provided; choose the one that best suits your nee
      ]
     ```
 
-4. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
+5. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
 
    ```cmd
    mklink "C:\[OpenUTAU Path]\Resamplers\hifisampler.exe" "C:\[Project Path]\hifisampler.exe"
    ```
 
-5. Before each use, run `hifiserver.py` to start the rendering service. If you're using the experimental server auto-start feature, you can skip this step. Enter the following command in your terminal:
+6. Before each use, run `hifiserver.py` to start the rendering service. If you're using the experimental server auto-start feature, you can skip this step. Enter the following command in your terminal:
 
    ```bash
    uv run hifiserver.py
    ```
 
-6. Set the resampler in UTAU to `hifisampler.exe` and ensure the rendering service is running.
+7. Set the resampler in UTAU to `hifisampler.exe` and ensure the rendering service is running.
 
 ### Manual Installation using conda/pip
 
@@ -75,14 +76,15 @@ Three installation methods are provided; choose the one that best suits your nee
    ```
 
 2. Download the CUDA version of PyTorch from the Torch website (If you're certain about only using the ONNX version, then downloading the CPU version of PyTorch is fine).
-3. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
+3. Download model files from release assets. Unzip and place it in the project folder.
+4. If you're using the experimental server auto-start feature (Optional, but not recommended), keep `config.default.yaml`, `hifiserver.py`, `hifisampler.exe`, and `launch_server.py` in the same directory. It's best to keep the original file structure after extracting the release. For OpenUTAU, you can create a symbolic link to place `hifisampler.exe` in the Resamplers folder.
 
    ```cmd
    mklink "C:\[OpenUTAU Path]\Resamplers\hifisampler.exe" "C:\[Project Path]\hifisampler.exe"
    ```
 
-4. Download the [release](https://github.com/openhachimi/hifisampler/releases), unzip it, and run 'hifiserver.py'.
-5. Set UTAU's resampler to `hifisampler.exe`.
+5. Download the [release](https://github.com/openhachimi/hifisampler/releases), unzip it, and run 'hifiserver.py'.
+6. Set UTAU's resampler to `hifisampler.exe`.
 
 ## Implemented flags
 

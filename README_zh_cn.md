@@ -32,8 +32,9 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 
 0. 安装 uv，安装方法请参考 [uv 文档](https://docs.astral.sh/uv/getting-started/installation/)。
 1. 下载 [release](https://github.com/openhachimi/hifisampler/releases) 源码并解压，进入文件夹。
-2. 在 config.yaml 中填入配置（如果是首次使用，则在 config.default.yaml 中修改，首次运行时会自动生成 config.yaml 文件）。
-3. 根据个人需求，可以选择适合自己硬件的 cuda 版本以获取加速，具体而言，在 `pyproject.toml` 中，如果需要 cuda 加速，则需要修改配置文件的 `tool.uv.sources` 部分，如：
+2. 从 release assets 下载模型文件，解压后放入项目文件夹。
+3. 在 config.yaml 中填入配置（如果是首次使用，则在 config.default.yaml 中修改，首次运行时会自动生成 config.yaml 文件）。
+4. 根据个人需求，可以选择适合自己硬件的 cuda 版本以获取加速，具体而言，在 `pyproject.toml` 中，如果需要 cuda 加速，则需要修改配置文件的 `tool.uv.sources` 部分，如：
 
    ```toml
    [tool.uv.sources]
@@ -51,19 +52,19 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
     ]
     ```
 
-4. （可选但不推荐）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
+5. （可选但不推荐）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
 
    ```cmd
    mklink "C:\[OpenUTAU路径]\Resamplers\hifisampler.exe" "C:\[项目路径]\hifisampler.exe"
    ```
 
-5. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
+6. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
 
    ```bash
    uv run hifiserver.py
    ```
 
-6. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
+7. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
 
 ### 使用 conda 手动安装
 
@@ -88,25 +89,26 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
 2. 安装依赖，输入
 
    ```bash
-   pip install numpy scipy resampy onnxruntime soundfile pyloudnorm
+   pip install -r requirements.txt
    ```
 
-3. 在 [torch 官网] (<https://pytorch.org/>) 下载 cuda 版本的 pytorch ( 如果你确定只使用 onnx 版，那么可以下载 cpu 版的 pytorch )
+3. 从 release assets 下载模型文件，解压后放入项目文件夹。
+4. 在 [torch 官网] (<https://pytorch.org/>) 下载 cuda 版本的 pytorch ( 如果你确定只使用 onnx 版，那么可以下载 cpu 版的 pytorch )
    具体安装方法：进入后往下滑，看到 INSTALL PYTORCH 以及一个表格，PyTorch Build 选 Stable , Your OS 选你的操作系统 , Package 选 pip , Language 选 python , Compute Platform 如果要下载 gpu 版就选带 cuda 的，下载 cpu 版选 cpu ，然后复制 Run this Command 右边表格里的命令到终端运行
-4. （可选但不推荐）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
+5. （可选但不推荐）如果采用服务端自启动（实验性），则需要保持 `config.default.yaml`, `hifiserver.py`, `hifisampler.exe` 以及 `launch_server.py` 四个文件在同一目录下。建议解压后保持原文件结构不变。OpenUTAU 可以采用创建软链接的方式将 `hifisampler.exe` 链接到 Resamplers 文件夹。
 
    ```cmd
    mklink "C:\[OpenUTAU路径]\Resamplers\hifisampler.exe" "C:\[项目路径]\hifisampler.exe"
    ```
 
-5. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
+6. 每次使用前运行 `hifiserver.py` 启动渲染服务。如果采用服务端自启动（实验性）则可以跳过此步骤。在终端输入
 
    ```bash
    conda activate hifisampler
    python hifiserver.py
    ```
 
-6. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
+7. 将 utau 的重采样器设置为 `hifisampler.exe`，并确保渲染服务已启动。
 
 ## 已实现的 flags
 
