@@ -19,6 +19,8 @@ audio:
   mel_fmax: 16000
 processing:
   wave_norm: false
+  trim_silence: true  # Trim silence for better wave normalization.
+  silence_threshold: -52.0  # dB
   loop_mode: false
   peak_limit: 1.0
   fill: 6

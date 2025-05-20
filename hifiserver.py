@@ -76,6 +76,8 @@ class Config:
     model_type: str = 'ckpt'  # or 'onnx'
     hnsep_model_path: str = r"\path\to\your\hnsep\model.pt"
     wave_norm: bool = False
+    trim_silence: bool = True  # 是否在响度标准化前截取无声部分
+    silence_threshold: float = -52.0
     loop_mode: bool = False
     peak_limit: float = 1.0
     max_workers: int = 8
@@ -113,10 +115,43 @@ def loudness_norm(
         loudness normalized audio
     """
 
-    # padding length to minimum block_size
     original_length = len(audio)
-    if original_length < int(rate * block_size):
-        padding_length = int(rate * block_size) - original_length
+    if Config.trim_silence:
+        def get_rms_db(audio_segment):
+            if len(audio_segment) == 0:
+                return -np.inf
+            rms = np.sqrt(np.mean(np.square(audio_segment)))
+            if rms < 1e-10:  # 避免log(0)错误
+                return -np.inf
+            return 20 * np.log10(rms)
+        
+        frame_length = int(rate * 0.02)  # 20ms窗口
+        hop_length = int(rate * 0.01)    # 10ms步长
+        
+        rms_values = []
+        for i in range(0, len(audio) - frame_length, hop_length):
+            frame = audio[i:i+frame_length]
+            rms_db = get_rms_db(frame)
+            rms_values.append(rms_db)
+        
+        voiced_frames = [i for i, rms in enumerate(rms_values) if rms > Config.silence_threshold]
+        
+        if voiced_frames:
+            first_voiced = voiced_frames[0]
+            last_voiced = voiced_frames[-1]
+            
+            start_sample = max(0, first_voiced * hop_length)
+            end_sample = min(len(audio), (last_voiced + 1) * hop_length + frame_length)
+            
+            trimmed_audio = audio[start_sample:end_sample]
+            logging.info(f'Trimmed silence: {len(audio)} -> {len(trimmed_audio)} samples')
+            
+            # 使用截取后的音频进行响度标准化
+            audio = trimmed_audio
+    
+    # 如果音频长度小于最小块大小，进行填充
+    if len(audio) < int(rate * block_size):
+        padding_length = int(rate * block_size) - len(audio)
         audio = np.pad(audio, (0, padding_length), mode='reflect')
 
     # Measure the loudness first
@@ -129,7 +164,22 @@ def loudness_norm(
     # Loudness normalize audio to [loudness] LUFS
     audio = pyln.normalize.loudness(audio, _loudness, final_loudness)
 
-    # If original audio was shorter than block_size, crop it back to its original length
+    # 如果启用了无声截取功能，需要恢复原始长度
+    if Config.trim_silence:
+        # 创建一个全零数组作为输出
+        output = np.zeros(original_length)
+        
+        # 将标准化后的音频放回原位置
+        if voiced_frames:  # 确保有声音帧存在
+            start_sample = max(0, first_voiced * hop_length)
+            end_sample = min(original_length, start_sample + len(audio))
+            output[start_sample:end_sample] = audio[:end_sample-start_sample]
+        else:  # 如果没有声音帧，直接返回原始音频
+            output = audio[:original_length]
+        
+        audio = output
+
+    # 如果原始音频短于block_size，裁剪回原始长度
     if original_length < int(rate * block_size):
         audio = audio[:original_length]
 
