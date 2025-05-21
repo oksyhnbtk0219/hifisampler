@@ -116,6 +116,8 @@ def loudness_norm(
     """
 
     original_length = len(audio)
+    original_audio = audio.copy()  # 保存原始音频用于后续处理
+    
     if Config.trim_silence:
         def get_rms_db(audio_segment):
             if len(audio_segment) == 0:
@@ -134,14 +136,19 @@ def loudness_norm(
             rms_db = get_rms_db(frame)
             rms_values.append(rms_db)
         
+        # 使用阈值检测有声帧
         voiced_frames = [i for i, rms in enumerate(rms_values) if rms > Config.silence_threshold]
         
         if voiced_frames:
             first_voiced = voiced_frames[0]
             last_voiced = voiced_frames[-1]
             
+            # 添加一些余量，避免突然截断
+            padding_frames = int(rate * 0.1) // hop_length  # 添加100ms的余量
+            
+            # 确保不超出边界
             start_sample = max(0, first_voiced * hop_length)
-            end_sample = min(len(audio), (last_voiced + 1) * hop_length + frame_length)
+            end_sample = min(len(audio), (last_voiced + 1 + padding_frames) * hop_length + frame_length)
             
             trimmed_audio = audio[start_sample:end_sample]
             logging.info(f'Trimmed silence: {len(audio)} -> {len(trimmed_audio)} samples')
@@ -169,11 +176,39 @@ def loudness_norm(
         # 创建一个全零数组作为输出
         output = np.zeros(original_length)
         
-        # 将标准化后的音频放回原位置
+        # 将标准化后的音频放回原位置，并添加平滑过渡
         if voiced_frames:  # 确保有声音帧存在
             start_sample = max(0, first_voiced * hop_length)
-            end_sample = min(original_length, start_sample + len(audio))
-            output[start_sample:end_sample] = audio[:end_sample-start_sample]
+            
+            # 计算需要放回的音频长度
+            available_length = min(len(audio), original_length - start_sample)
+            
+            # 创建一个逐渐衰减的窗函数，用于音频的尾部淡出
+            fade_length = min(int(rate * 0.2), available_length // 4)  # 最多200ms或音频长度的1/4
+            fade_out = np.ones(available_length)
+            
+            if fade_length > 0:
+                # 在末尾应用淡出效果
+                fade_out[-fade_length:] = np.linspace(1.0, 0.0, fade_length)
+            
+            # 应用淡出效果并放回原位置
+            output[start_sample:start_sample+available_length] = audio[:available_length] * fade_out
+              # 如果原始音频有后续部分，应用交叉淡入淡出
+            if start_sample + available_length < original_length:
+                remain_length = original_length - (start_sample + available_length)
+                crossfade_length = min(fade_length, remain_length)
+                
+                if crossfade_length > 0:
+                    crossfade_start = start_sample + available_length
+                    # 从原始音频获取剩余部分
+                    remain_audio = original_audio[crossfade_start:original_length]
+                    
+                    # 应用淡入效果到原始音频的剩余部分
+                    fade_in = np.ones(remain_length)
+                    fade_in[:crossfade_length] = np.linspace(0.0, 1.0, crossfade_length)
+                    
+                    # 填充剩余部分
+                    output[crossfade_start:original_length] = remain_audio * fade_in
         else:  # 如果没有声音帧，直接返回原始音频
             output = audio[:original_length]
         
