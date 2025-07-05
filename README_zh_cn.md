@@ -39,7 +39,7 @@ pc-nsf-hifigan 是传统 nsf-hifigan 的改进，支持输入与 mel 不匹配�
    ```toml
    [tool.uv.sources]
    torch = [
-      { index = "pytorch-cu124" },
+      { index = "pytorch-cu128" },
    ]
    ```
 

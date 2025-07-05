@@ -40,7 +40,7 @@ Three installation methods are provided; choose the one that best suits your nee
    ```toml
    [tool.uv.sources]
    torch = [
-      { index = "pytorch-cu124" },
+      { index = "pytorch-cu128" },
    ]
    ```
 
