@@ -1101,6 +1101,10 @@ class Resampler:
 
         if new_max > Config.peak_limit:
             render = render / new_max
+
+        volume_scale = self.volume / 100.0
+        render = render * volume_scale
+
         save_wav(self.out_file, render)
 
 
