@@ -579,8 +579,11 @@ class Resampler:
         self.out_file = out_file
         self.pitch = note_to_midi(pitch)
         self.velocity = float(velocity)
-        self.flags = {k: int(v) if v else None for k,
-                      v in flag_re.findall(flags.replace('/', ''))}
+        # 修改 flags 处理逻辑，保留第一次出现的值
+        self.flags = {}
+        for k, v in flag_re.findall(flags.replace('/', '')):
+            if k not in self.flags:  # 只在 key 不存在时添加
+                self.flags[k] = int(v) if v else None
         self.offset = float(offset)
         self.length = int(length)
         self.consonant = float(consonant)
@@ -1101,6 +1104,10 @@ class Resampler:
 
         if new_max > Config.peak_limit:
             render = render / new_max
+
+        volume_scale = self.volume / 100.0
+        render = render * volume_scale
+
         save_wav(self.out_file, render)
 
 
