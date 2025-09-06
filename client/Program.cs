@@ -48,16 +48,19 @@ class Program
             using (var mutex = new Mutex(false, ServerStartupMutexName))
             {
                 bool mutexAcquired = false;
+                bool mutexOwned = false; // Track if we actually own the mutex
                 try
                 {
                     try
                     {
                         mutexAcquired = mutex.WaitOne(TimeSpan.FromSeconds(5));
+                        mutexOwned = mutexAcquired; // Normal acquisition
                     }
                     catch (AbandonedMutexException)
                     {
                         Console.WriteLine("[Main] Warning: Acquired abandoned mutex. Previous owner likely crashed.");
                         mutexAcquired = true;
+                        mutexOwned = true; // We own it after abandoned mutex exception
                     }
 
                     // --- Phase 3: Actions Inside Mutex (if acquired) ---
@@ -135,16 +138,41 @@ class Program
                 }
                 finally
                 {
-                    if (mutexAcquired)
+                    // Improved mutex release with better error handling
+                    if (mutexOwned)
                     {
+                        bool releaseSucceeded = false;
                         try
                         {
                             mutex.ReleaseMutex();
-                            Console.WriteLine("[Main] Mutex released.");
+                            Console.WriteLine("[Main] Mutex released successfully.");
+                            releaseSucceeded = true;
+                        }
+                        catch (ApplicationException ex)
+                        {
+                            // This usually means the mutex was already released or we don't own it
+                            Console.WriteLine($"[Main] ApplicationException during mutex release (usually safe to ignore): {ex.Message}");
+                            releaseSucceeded = true; // Treat as success since mutex is effectively released
+                        }
+                        catch (ObjectDisposedException ex)
+                        {
+                            // Mutex was disposed, which means it's effectively released
+                            Console.WriteLine($"[Main] Mutex was already disposed: {ex.Message}");
+                            releaseSucceeded = true;
                         }
                         catch (Exception ex)
                         {
-                            Console.Error.WriteLine($"[Main] CRITICAL: Error releasing mutex: {ex.GetType().Name}");
+                            Console.Error.WriteLine($"[Main] Unexpected error releasing mutex: {ex.GetType().Name} - {ex.Message}");
+                            // Don't treat as success - this might be a real problem
+                        }
+
+                        if (releaseSucceeded)
+                        {
+                            mutexOwned = false; // Mark as no longer owned
+                        }
+                        else
+                        {
+                            Console.Error.WriteLine("[Main] Warning: Failed to properly release mutex. This may affect future launches.");
                         }
                     }
                 }
@@ -188,9 +216,7 @@ class Program
         }
     }
 
-
     // --- Communication Function (with Retries) ---
-    // (Keep the CommunicateWithServer function exactly as in the previous final answer)
     static async Task CommunicateWithServer(string[] args)
     {
         int maxRetries = 2;
@@ -262,7 +288,6 @@ class Program
     }
 
     // --- Readiness Check Function (GET /) ---
-    // (Keep the IsServerReady function exactly as in the previous final answer)
     static async Task<bool> IsServerReady(int port)
     {
         HttpClient checkClient = null;
@@ -283,7 +308,6 @@ class Program
     }
 
     // --- Wait Function (Polls IsServerReady) ---
-    // (Keep the WaitForServerToStart function exactly as in the previous final answer)
     static async Task<bool> WaitForServerToStart(int port, int timeoutSeconds, string logPrefix = "[WaitForServer]")
     {
         Console.WriteLine($"{logPrefix} Waiting up to {timeoutSeconds}s for server at port {port} to be ready (GET / returns 200 OK)...");
@@ -324,7 +348,6 @@ class Program
     }
 
     // --- Basic Port Check (Used ONLY inside mutex) ---
-    // (Keep the IsPortInUse function exactly as in the previous final answer)
     static bool IsPortInUse(int port)
     {
         const int timeoutMs = 150;
@@ -355,8 +378,7 @@ class Program
         }
     }
 
-    // --- Server Launcher (Revised for VISIBLE Window - same as previous answer) ---
-    // (Keep the LaunchServerLauncher function exactly as in the previous final answer)
+    // --- Server Launcher (Revised for VISIBLE Window) ---
     static void LaunchServerLauncher(string launcherScriptPath)
     {
         if (string.IsNullOrEmpty(launcherScriptPath) || !File.Exists(launcherScriptPath))
