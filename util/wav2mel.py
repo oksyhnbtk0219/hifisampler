@@ -17,8 +17,8 @@ class PitchAdjustableMelSpectrogram:
         n_fft=2048,
         win_length=2048,
         hop_length=512,
-        f_min=40,
-        f_max=16000,
+        f_min=40.0,
+        f_max=16000.0,
         n_mels=128,
         center=False,
     ):
@@ -118,7 +118,7 @@ if __name__=='__main__':
         audio = torch.clamp(audio[0], -1.0, 1.0)
 
         mel_spec_transform=PitchAdjustableMelSpectrogram()
-        with torch.no_grad():
+        with torch.inference_mode():
             spectrogram = mel_spec_transform(audio.unsqueeze(0).cuda())*0.434294
             # spectrogram = 20 * torch.log10(torch.clamp(spectrogram, min=1e-5)) - 20  #ds 是log10
             # spectrogram = torch.log(torch.clamp(spectrogram, min=1e-5))

@@ -47,7 +47,7 @@ class NsfHifiGAN:
         return self.device
 
     def spec2wav_torch(self, mel, **kwargs): 
-        with torch.no_grad():
+        with torch.inference_mode():
             c = mel  # [B, T, bins]
             f0 = kwargs.get('f0')  # [B, T]
             if f0 is not None:
@@ -169,7 +169,7 @@ class SineGen(torch.nn.Module):
         sines = torch.sin(2 * np.pi * rad)
         return sines
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def forward(self, f0, upp):
         """ sine_tensor, uv = forward(f0)
         input F0: tensor(batchsize=1, length, dim=1)

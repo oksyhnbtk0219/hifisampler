@@ -5,9 +5,14 @@ env:
   conda_env_name: "hifisampler"
   python_script_path: "./hifiserver.py"
 model:
-  vocoder_path: "./pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt"
-  model_type: "ckpt"
-  hnsep_model_path: "./hnsep/vr/model.pt"
+  # Recommended onnx for CPU users.
+  vocoder_path: "./pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.onnx"
+  model_type: "onnx"
+  hnsep_model_path: "./hnsep/vr/model_fp16.onnx"
+  # GPU users can also try torch model.
+  # vocoder_path: "./pc_nsf_hifigan_44.1k_hop512_128bin_2025.02/model.ckpt"
+  # model_type: "ckpt"
+  # hnsep_model_path: "./hnsep/vr/model.pt"
 audio:
   sample_rate: 44100
   win_size: 2048
@@ -25,4 +30,4 @@ processing:
   peak_limit: 1.0
   fill: 6
 performance:
-  max_workers: 8  # Number of threads for GPU processing. ckpt model only
+  max_workers: 2  # Number of worker threads. Recommend 2-4.
