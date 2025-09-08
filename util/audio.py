@@ -4,7 +4,6 @@ import numpy as np
 import resampy
 import torch
 from config import CONFIG
-from scipy import signal
 import soundfile as sf
 
 if CONFIG.wave_norm:
@@ -159,42 +158,6 @@ def loudness_norm(
         audio = audio[:original_length]
 
     return audio
-
-
-def growl(audio: np.ndarray, sample_rate: int, frequency: float = 80.0, strength: float = 0.5, waveform: str = 'square') -> np.ndarray:
-    """
-    Apply high frequency vibrato effect to the audio signal using square wave modulation.
-
-    Args:
-        audio (np.ndarray): Input audio signal.
-        sample_rate (int): Sample rate of the audio signal.
-        frequency (float): Frequency of the vibrato effect in Hz.
-        strength (float): Strength of the vibrato effect (0 to 1).
-
-    Returns:
-        np.ndarray: Audio signal with growl effect applied.
-    """
-    if strength == 0 and frequency <= 0:
-        return audio
-
-    # --- 1. Generate Base Pitch Modulation (Vibrato + Jitter) ---
-    num_samples = len(audio)
-    t = np.arange(num_samples) / float(sample_rate)
-    # Generate LFO for pitch modulation based on the selected waveform
-    pitch_lfo = signal.square(2 * np.pi * frequency * t)
-
-    # Combine LFO and Jitter for total pitch modulation
-    max_pitch_dev_cents = 50.0  # Max deviation for vibrato at full strength
-    cents_deviation = (pitch_lfo * strength) * max_pitch_dev_cents
-    pitch_ratio = 2**(cents_deviation / 1200.0)
-
-    # --- 2. Apply Pitch Modulation via Resampling ---
-    read_indices = np.cumsum(pitch_ratio) - pitch_ratio[0]
-    original_indices = np.arange(num_samples)
-    growl_audio = np.interp(read_indices, original_indices, audio)
-
-    return growl_audio
-
 
 def pre_emphasis_base_tension(wave, b):
     """

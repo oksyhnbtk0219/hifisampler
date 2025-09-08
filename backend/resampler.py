@@ -8,7 +8,8 @@ from filelock import FileLock, Timeout
 
 from config import CONFIG
 from backend import models
-from util.audio import dynamic_range_compression_torch, growl, loudness_norm, pre_emphasis_base_tension, read_wav, save_wav
+from util.growl import growl
+from util.audio import dynamic_range_compression_torch, loudness_norm, pre_emphasis_base_tension, read_wav, save_wav
 from util.parse_utau import flag_re, midi_to_hz, note_to_midi, pitch_string_to_cents
 
 cache_ext = '.hifi.npz'  # cache file extension
@@ -513,9 +514,8 @@ class Resampler:
         if "HG" in self.flags.keys():
             hg_strength = self.flags['HG']
             if hg_strength is not None:
-                # 以120Hz的频率进行高频率的vibrato，使用hg_strength作为颤音强度
                 render = growl(
-                    render, CONFIG.sample_rate, frequency=75, strength=hg_strength/100)
+                    render, CONFIG.sample_rate, frequency=80.0, strength=hg_strength/100)
 
         # normalize using loudness_norm
         if CONFIG.wave_norm:

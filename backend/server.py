@@ -6,11 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 from backend.resampler import Resampler
 
-# 全局变量，表示服务器是否就绪
 server_ready = False
 
 def split_arguments(input_string):
-    # Regular expression to match two file paths at the beginning
     otherargs = input_string.split(' ')[-11:]
     file_path_strings = ' '.join(input_string.split(' ')[:-11])
 
@@ -25,9 +23,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
             self.wfile.write(b'Server Ready')
-            logging.info("Responded 200 OK to readiness check.")  # Optional: Verbose logging
+            logging.info("Responded 200 OK to readiness check.")
         else:
-            # 503 Service Unavailable is appropriate
             self.send_response(503)
             self.send_header('Content-type', 'text/plain')
             self.end_headers()
@@ -57,14 +54,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             note_info_for_log = f"'{in_file_path.stem}' -> '{out_file_path.name}'"
             logging.info(f"Processing {note_info_for_log} begins...")
 
-            import time
-            start_time = time.time()
             # === Execute Resampler within try...except ===
             Resampler(*sliced)
             # If Resampler completes without exception, it's considered successful *by the server*
-            end_time = time.time()
-            elapsed = end_time - start_time
-            logging.error(f"Processing {note_info_for_log} took {elapsed:.2f} seconds.")
             logging.info(f"Processing {note_info_for_log} successful.")
             self.send_response(200)  # Send 200 OK
             self.send_header('Content-type', 'text/plain')
@@ -125,7 +117,7 @@ class ThreadPoolHTTPServer(HTTPServer):
 def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=1):
     global server_ready
 
-    server_address = ('', port)  # 可以从CONFIG中获取端口
+    server_address = ('', port)
     httpd = server_class(server_address, handler_class, max_workers=max_workers)
 
     logging.info(f'Listening on port {server_address[1]} with {max_workers} worker threads...')
