@@ -6,31 +6,17 @@ import torch
 from hnsep.nets import CascadedNet
 from util.audio import DotDict
 
-class OnnxHnsepModel:
-    """ONNX inference wrapper for HN-SEP model"""
+class HnsepModel:
+    """HN-SEP ONNX inference wrapper that receives pre-created session"""
     
-    def __init__(self, onnx_path, config_args):
-        import onnxruntime
-        
-        # Determine available providers, prioritize performance
-        available_providers = onnxruntime.get_available_providers()
-        preferred_providers = []
-        if 'CUDAExecutionProvider' in available_providers:
-            preferred_providers.append('CUDAExecutionProvider')
-        elif 'DmlExecutionProvider' in available_providers:
-            preferred_providers.append('DmlExecutionProvider')
-        preferred_providers.append('CPUExecutionProvider')  # Fallback
-        
-        self.session = onnxruntime.InferenceSession(str(onnx_path), providers=preferred_providers)
+    def __init__(self, onnx_session, config_args):
+        self.session = onnx_session
         self.config = config_args
         self.n_fft = config_args['n_fft']
         self.hop_length = config_args['hop_length']
         self.max_bin = self.n_fft // 2
         self.output_bin = self.n_fft // 2 + 1
         self.offset = 64
-        
-        used_provider = self.session.get_providers()[0]
-        logging.info(f'Loaded HN-SEP (ONNX): {onnx_path} using provider {used_provider}')
     
     def forward(self, x):
         """
@@ -67,27 +53,6 @@ class OnnxHnsepModel:
         
         return output_tensor
     
-    def predict_mask(self, x):
-        """Predict mask with offset handling"""
-        mask = self.forward(x)
-        
-        if self.offset > 0:
-            mask = mask[:, :, :, self.offset:-self.offset]
-            assert mask.size()[3] > 0
-        
-        return mask
-    
-    def predict(self, x):
-        """Predict separated audio"""
-        mask = self.forward(x)
-        pred = x * mask
-        
-        if self.offset > 0:
-            pred = pred[:, :, :, self.offset:-self.offset]
-            assert pred.size()[3] > 0
-        
-        return pred
-    
     def predict_fromaudio(self, x):
         """Predict from audio input"""
         B, C, T = x.shape
@@ -122,7 +87,7 @@ class OnnxHnsepModel:
         return x_pred
 
 def load_sep_model(model_path, device=torch.device('cpu')):
-    """Load HN-SEP model from checkpoint or ONNX."""
+    """Load HN-SEP model from checkpoint. Use HNSEPLoader for unified loading."""
     model_dir = os.path.dirname(os.path.abspath(model_path))
     config_file = os.path.join(model_dir, 'config.yaml')
     
@@ -132,25 +97,20 @@ def load_sep_model(model_path, device=torch.device('cpu')):
     
     model_path_obj = Path(model_path)
     
-    # Check if ONNX model should be used
     if model_path_obj.suffix == '.onnx':
-        # Use ONNX model
-        model = OnnxHnsepModel(model_path, args_dict)
-        logging.info(f"Loaded HN-SEP model (ONNX): {model_path}")
-        return model, args
-    else:
-        # Use PyTorch model
-        model = CascadedNet(
-            args_dict['n_fft'],
-            args_dict['hop_length'],
-            args_dict['n_out'],
-            args_dict['n_out_lstm'],
-            True,
-            is_mono=args_dict['is_mono'],
-            fixed_length=True if args_dict.get('fixed_length', None) is None else args_dict['fixed_length']
-        )
-        model.to(device)
-        model.load_state_dict(torch.load(model_path, map_location='cpu'))
-        model.eval()
-        logging.info(f"Loaded HN-SEP model (PyTorch): {model_path}")
-        return model, args
+        raise ValueError("ONNX models should be loaded through HNSEPLoader for unified session management")
+    
+    model = CascadedNet(
+        args_dict['n_fft'],
+        args_dict['hop_length'],
+        args_dict['n_out'],
+        args_dict['n_out_lstm'],
+        True,
+        is_mono=args_dict['is_mono'],
+        fixed_length=True if args_dict.get('fixed_length', None) is None else args_dict['fixed_length']
+    )
+    model.to(device)
+    model.load_state_dict(torch.load(model_path, map_location='cpu'))
+    model.eval()
+    logging.info(f"Loaded HN-SEP model (PyTorch): {model_path}")
+    return model, args
