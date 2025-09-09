@@ -1,87 +1,36 @@
 import logging
-from pathlib import Path
 
 from config import CONFIG
-from util.nsf_hifigan import NsfHifiGAN
 from util.wav2mel import PitchAdjustableMelSpectrogram
-from util.hnsep import load_sep_model
+from util.model_loader import HifiGANLoader, HNSEPLoader
 
 vocoder = None
 ort_session = None
 hnsep_model = None
-hnsep_ort_session = None
 mel_analyzer = None
+vocoder_type = None
+hnsep_type = None
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
 def initialize_models():
-    global vocoder, ort_session, hnsep_model, mel_analyzer
+    global vocoder, ort_session, hnsep_model, mel_analyzer, vocoder_type, hnsep_type
     
     logging.info("Initializing models...")
 
-    # 1. 加载 HifiGAN Vocoder
-    vocoder_path = Path(CONFIG.vocoder_path)
-    onnx_default_path = Path(
-                r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.onnx")
-    ckpt_default_path = Path(
-        r"pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt")
-
-    # Determine actual vocoder path
-    actual_vocoder_path = None
-    if vocoder_path.exists():
-        actual_vocoder_path = vocoder_path
-    elif ckpt_default_path.exists():
-        actual_vocoder_path = ckpt_default_path
-        logging.info(
-            f"Configured vocoder path not found, using default: {ckpt_default_path}")
-    elif onnx_default_path.exists():
-        actual_vocoder_path = onnx_default_path
-        logging.info(
-            f"Configured vocoder path not found, using default: {onnx_default_path}")
-    else:
-        raise FileNotFoundError(
-            f"No HifiGAN model found. Checked configured path '{CONFIG.vocoder_path}' and defaults.")
-
-    # Load
-    if actual_vocoder_path.suffix == '.ckpt':
-        vocoder = NsfHifiGAN(model_path=actual_vocoder_path)
-        vocoder.to_device(CONFIG.device)
-        logging.info(f'Loaded HifiGAN (ckpt): {actual_vocoder_path} on {CONFIG.device}')
-        logging.info(f'Using device: {CONFIG.device}')
-    elif actual_vocoder_path.suffix == '.onnx':
-        import onnxruntime
+    hifigan_loader = HifiGANLoader(CONFIG.vocoder_path, CONFIG.device, CONFIG)
+    hnsep_loader = HNSEPLoader(CONFIG.hnsep_model_path, CONFIG.device, CONFIG)
+    
+    vocoder_result = hifigan_loader.load_model()
+    model_or_session, vocoder_type = vocoder_result
+    if vocoder_type == 'onnx':
+        ort_session = model_or_session
         CONFIG.model_type = 'onnx'
-        # Determine available providers, prioritize DML/CUDA over CPU
-        available_providers = onnxruntime.get_available_providers()
-        preferred_providers = []
-        if 'CUDAExecutionProvider' in available_providers:
-            preferred_providers.append('CUDAExecutionProvider')
-        elif 'DmlExecutionProvider' in available_providers:
-            preferred_providers.append('DmlExecutionProvider')
-        preferred_providers.append('CPUExecutionProvider')  # Fallback
-
-        # Build the session using the actual resolved model path
-        ort_session = onnxruntime.InferenceSession(
-            str(actual_vocoder_path), providers=preferred_providers)
-        used_provider = ort_session.get_providers()[0]
-        logging.info(
-            f'Loaded HifiGAN (onnx): {actual_vocoder_path} using providers {ort_session.get_providers()}')
-        logging.info(f'Primary provider: {used_provider}')
-
-        # If using DirectML, keep single worker due to known multi-thread request issue
-        if used_provider == 'DmlExecutionProvider':
-            if CONFIG.max_workers != 1:
-                logging.info('DirectML detected: forcing max_workers=1 to avoid DML multi-thread bug.')
-            CONFIG.max_workers = 1
-        else:
-            # For CPU EP (and CUDA EP), allow configured max_workers; CPU EP will run single-thread per request.
-            logging.info('ONNX Runtime configured for per-request 1 thread; multi-worker concurrency is allowed.')
     else:
-        raise ValueError(f'Unsupported vocoder model type: {vocoder_path.suffix}')
-
-    # 2. 加载 HN-SEP - 自动检测模型类型
-    hnsep_model_path = Path(CONFIG.hnsep_model_path)
-    hnsep_model, _ = load_sep_model(str(hnsep_model_path), CONFIG.device)
+        vocoder = model_or_session
+    
+    hnsep_result = hnsep_loader.load_model()
+    hnsep_model, hnsep_type, _ = hnsep_result
 
     # 3. 初始化 Mel Spectrogram 工具
     mel_analyzer = PitchAdjustableMelSpectrogram(
