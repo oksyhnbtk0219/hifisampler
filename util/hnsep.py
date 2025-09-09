@@ -37,6 +37,9 @@ class OnnxHnsepModel:
         Forward pass with complex spectrogram input
         x: complex tensor [batch, channels, freq, time]
         """
+        # Store the original device for later
+        original_device = x.device
+        
         # Convert complex tensor to real/imaginary parts for ONNX
         if torch.is_complex(x):
             # Convert complex to [batch, 2, freq, time] format
@@ -52,8 +55,8 @@ class OnnxHnsepModel:
         # Run ONNX inference
         output = self.session.run(['output'], {'input': x_numpy})[0]
         
-        # Convert back to torch tensor
-        output_tensor = torch.from_numpy(output)
+        # Convert back to torch tensor and move to original device
+        output_tensor = torch.from_numpy(output).to(original_device)
         
         # Convert back to complex format if needed
         if output_tensor.shape[1] == 2:
