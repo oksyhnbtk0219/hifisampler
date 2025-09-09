@@ -1,16 +1,15 @@
 import logging
-import os
 import numpy as np
 import torch
 import scipy.interpolate as interp
 from pathlib import Path
-from filelock import FileLock, Timeout
 
 from config import CONFIG
 from backend import models
 from util.growl import growl
 from util.audio import dynamic_range_compression_torch, loudness_norm, pre_emphasis_base_tension, read_wav, save_wav
 from util.parse_utau import flag_re, midi_to_hz, note_to_midi, pitch_string_to_cents
+from util.cache_manager import cache_manager
 
 cache_ext = '.hifi.npz'  # cache file extension
 
@@ -56,166 +55,55 @@ class Resampler:
             features_path = features_path.with_name(
                 f'{self.in_file.stem}{cache_ext}')
 
-        lock_path = str(features_path) + ".lock"
+        force_generate = 'G' in self.flags.keys()
+        features = cache_manager.load_features_cache(features_path, force_generate)
 
-        lock = FileLock(lock_path, timeout=60)
-        features = None
+        if features is not None:
+            return features
+        logging.info(f'{features_path} not found or forcing generation. Generating features.')
+        features = self.generate_features(features_path)
+        return cache_manager.save_features_cache(features_path, features)
 
-        try:
-            with lock:
-                force_generate = 'G' in self.flags.keys()
+    def _needs_hnsep_separation(self, breath, voicing, tension):
+        if tension != 0:
+            return True
+        elif breath == voicing:
+            return False
+        return True
 
-                if force_generate:
-                    logging.info('G flag exists. Forcing feature generation.')
-                    features = self.generate_features(features_path)
-                elif features_path.exists():
-                    try:
-                        features = np.load(str(features_path))
-                        logging.info('Cache loaded successfully.')
-                    except (EOFError, OSError, ValueError) as e:
-                        logging.warning(
-                            f'Failed to load cache {features_path} ({type(e).__name__}: {e}). Regenerating...')
-                        try:
-                            os.remove(features_path)
-                        except OSError as rm_err:
-                            logging.error(
-                                f"Could not remove corrupted cache file {features_path}: {rm_err}")
-                        # 在锁内重新生成
-                        features = self.generate_features(features_path)
-                else:
-                    logging.info(
-                        f'{features_path} not found. Generating features.')
-                    features = self.generate_features(features_path)
-
-                logging.info(f'File lock released for {lock_path}')
-            # 自动释放锁
-
-        except Timeout:
-            logging.error(
-                f"Could not acquire lock for {lock_path} within 60 seconds!")
-            raise RuntimeError(
-                f"Failed to acquire cache lock for {features_path}")
-
-        # 确保 features 被成功赋值
-        if features is None:
-            logging.error(
-                f"Logic error: Features could not be loaded or generated for {features_path}")
-            raise RuntimeError(f"Could not get features for {features_path}")
-
-        return features
+    def _apply_simple_scaling(self, wave, breath):
+        breath = np.clip(breath, 0, 500)
+        scale_factor = breath / 100
+        logging.info(f'Applying simple scaling with factor: {scale_factor}')
+        return wave * scale_factor
 
     def generate_features(self, features_path):
         wave = read_wav(self.in_file)
         wave = torch.from_numpy(wave).to(
             dtype=torch.float32, device=CONFIG.device).unsqueeze(0).unsqueeze(0)
-        print(wave.shape)
+        logging.info(wave.shape)
 
         breath = self.flags.get("Hb", 100)
         voicing = self.flags.get("Hv", 100)
         tension = self.flags.get("Ht", 0)
-        print(f'breath: {breath}, voicing: {voicing}, tension: {tension}')
-        if breath != 100 or voicing != 100 or tension != 0:
-            logging.info(
-                'Hb or Hv or Ht flag exists. Split audio into breath, voicing')
+        logging.info(f'breath: {breath}, voicing: {voicing}, tension: {tension}')
+        
+        if self._needs_hnsep_separation(breath, voicing, tension):
+            logging.info('Hb, Hv, or Ht flag requires hnsep separation. Split audio into breath, voicing')
 
             hnsep_cache_path = self.in_file.with_name(
                 f'{self.in_file.stem}_hnsep')
-            lock_path = str(hnsep_cache_path) + ".lock"
-            lock_hnsep = FileLock(lock_path, timeout=60)  # 设置60秒超时
-
-            seg_output = None  # 初始化 features 变量
-            re_generate_hnsep = True
             
-            # First, try a quick non-blocking check to see if cache exists and is valid
-            if 'G' not in self.flags.keys() and hnsep_cache_path.exists():
-                try:
-                    # Quick load attempt without lock for read-only check
-                    seg_output = torch.load(str(hnsep_cache_path), map_location=CONFIG.device)
-                    logging.info('Hnsep cache loaded successfully (fast path).')
-                    re_generate_hnsep = False
-                except Exception:
-                    # If quick load fails, fall back to locked generation below
-                    seg_output = None
-                    
-            if seg_output is None:  # Need to generate or re-load with proper locking
-                try:
-                    with lock_hnsep:
-                        force_generate = 'G' in self.flags.keys()
+            force_generate = 'G' in self.flags.keys()
+            # 缓存优先
 
-                        if force_generate:
-                            logging.info(
-                                'G flag exists. Forcing hnsep feature generation.')
-                            with torch.inference_mode():
-                                seg_output = models.hnsep_model.predict_fromaudio(
-                                    wave)  # 预测谐波
-                        elif hnsep_cache_path.exists():
-                            try:
-                                seg_output = torch.load(
-                                    str(hnsep_cache_path), map_location=CONFIG.device)
-                                logging.info(
-                                    'Cache loaded seg_output successfully.')
-                                re_generate_hnsep = False
-                            except (EOFError, OSError, ValueError) as e:
-                                logging.warning(
-                                    f'Failed to load cache {hnsep_cache_path} ({type(e).__name__}: {e}). Regenerating...')
-                                try:
-                                    os.remove(hnsep_cache_path)
-                                except OSError as rm_err:
-                                    logging.error(
-                                        f"Could not remove corrupted cache file {hnsep_cache_path}: {rm_err}")
-                                # 在锁内重新生成
-                                with torch.inference_mode():
-                                    seg_output = models.hnsep_model.predict_fromaudio(
-                                        wave)
-                        else:
-                            logging.info(
-                                f'{hnsep_cache_path} not found. Generating features.')
-                            with torch.inference_mode():
-                                seg_output = models.hnsep_model.predict_fromaudio(wave)
-
-                        if re_generate_hnsep:
-
-                            # 原子写入
-                            temp_suffix = ".hnsep_tmp"
-                            temp_path = hnsep_cache_path.with_suffix(
-                                hnsep_cache_path.suffix + temp_suffix)
-                            print("temp_path:", temp_path)
-
-                            try:
-                                # np.savez_compressed(str(temp_path), **features)
-                                torch.save(seg_output, str(temp_path))
-                                os.replace(str(temp_path), str(hnsep_cache_path))
-                                logging.info(
-                                    f'Hnsep features saved successfully to {hnsep_cache_path}')
-                            except Exception as e:
-                                logging.error(
-                                    f'Error during saving/renaming cache file {hnsep_cache_path}: {e}', exc_info=True)
-
-                                if temp_path.exists():
-                                    try:
-                                        os.remove(str(temp_path))
-                                        logging.info(
-                                            f'Removed temporary file {temp_path} after error.')
-                                    except OSError as rm_err:
-                                        logging.error(
-                                            f"Could not remove temporary file {temp_path} after error: {rm_err}")
-                                raise
-
-                        logging.info(f'File lock released for {lock_path}')
-                    # 自动释放锁
-
-                except Timeout:
-                    logging.error(
-                        f"Could not acquire lock for {lock_path} within 60 seconds!")
-                    raise RuntimeError(
-                        f"Failed to acquire cache lock for {seg_output}")
-
-            # 确保 seg_output 被成功赋值
+            seg_output = cache_manager.load_hnsep_cache(hnsep_cache_path, str(CONFIG.device), force_generate)
+            
             if seg_output is None:
-                logging.error(
-                    f"Logic error: Features could not be loaded or generated for {hnsep_cache_path}")
-                raise RuntimeError(
-                    f"Could not get features for {hnsep_cache_path}")
+                logging.info(f'Generating hnsep features for {hnsep_cache_path}')
+                with torch.inference_mode():
+                    seg_output = models.hnsep_model.predict_fromaudio(wave)
+                seg_output = cache_manager.save_hnsep_cache(hnsep_cache_path, seg_output)
 
             breath = np.clip(breath, 0, 500)
             voicing = np.clip(voicing, 0, 150)
@@ -227,6 +115,10 @@ class Resampler:
             else:
                 wave = (breath/100)*(wave - seg_output) + \
                     (voicing/100)*seg_output
+        elif breath != 100 or voicing != 100:
+            # 当 breath == voicing 且不等于 100 时，应用简单缩放优化
+            logging.info(f'Hb == Hv ({breath}), applying optimized simple scaling instead of hnsep separation')
+            wave = self._apply_simple_scaling(wave, breath)
         wave = wave.squeeze(0).squeeze(0).cpu().numpy()
         wave = torch.from_numpy(wave).to(
             dtype=torch.float32, device=CONFIG.device).unsqueeze(0)  # 默认不缩放
@@ -250,33 +142,9 @@ class Resampler:
             gender/100, 1).squeeze()
         logging.info(f'mel_origin: {mel_origin.shape}')
         mel_origin = dynamic_range_compression_torch(mel_origin).cpu().numpy()
-        logging.info('Saving features.')
+        logging.info('Features generation completed.')
 
         features = {'mel_origin': mel_origin, 'scale': scale}
-
-        # 原子写入
-        temp_suffix = ".tmp"
-        temp_path = features_path.with_suffix(
-            features_path.suffix + temp_suffix)
-
-        try:
-            np.savez_compressed(str(temp_path), **features)
-            os.replace(str(temp_path) + '.npz', str(features_path))
-            logging.info(f'Features saved successfully to {features_path}')
-        except Exception as e:
-            logging.error(
-                f'Error during saving/renaming cache file {features_path}: {e}', exc_info=True)
-
-            if temp_path.exists():
-                try:
-                    os.remove(str(temp_path))
-                    logging.info(
-                        f'Removed temporary file {temp_path} after error.')
-                except OSError as rm_err:
-                    logging.error(
-                        f"Could not remove temporary file {temp_path} after error: {rm_err}")
-            raise
-
         return features
 
     def resample(self, features):
