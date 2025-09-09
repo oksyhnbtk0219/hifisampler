@@ -5,7 +5,6 @@ from pathlib import Path
 from filelock import FileLock, Timeout
 from backend import models
 from backend import server
-from config import CONFIG
 
 version = '0.0.6-hifisampler'
 
@@ -18,7 +17,7 @@ if __name__ == '__main__':
             logging.info(
                 f"Successfully acquired server lock: {lock_file_path}")
             models.initialize_models()
-            server.run(max_workers=CONFIG.max_workers)
+            server.run()
     except Timeout:
         logging.warning(
             f"Another instance seems to be running (lock file '{lock_file_path}' is held). Exiting.")

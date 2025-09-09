@@ -1,125 +1,76 @@
+import asyncio
+from functools import partial
 import logging
-from pathlib import Path
 import traceback
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from concurrent.futures import ThreadPoolExecutor
-
+from pathlib import Path
+from aiohttp import web
+from concurrent.futures import ThreadPoolExecutor   # 或 ProcessPoolExecutor
 from backend.resampler import Resampler
+from config import CONFIG
 
-server_ready = False
+server_ready = False                # /GET 用
+infer_executor = ThreadPoolExecutor(max_workers=CONFIG.max_workers) # 推理任务队列
 
-def split_arguments(input_string):
+def split_arguments(input_string: str):
     otherargs = input_string.split(' ')[-11:]
     file_path_strings = ' '.join(input_string.split(' ')[:-11])
-
     first_file, second_file = file_path_strings.split('.wav ')
-    return [first_file+".wav", second_file] + otherargs
+    return [first_file + ".wav", second_file] + otherargs
 
+async def handle_get(request: web.Request):
+    if server_ready:
+        return web.Response(text='Server Ready', status=200)
+    else:
+        return web.Response(text='Server Initializing', status=503)
 
-class RequestHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if server_ready:
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'Server Ready')
-            logging.info("Responded 200 OK to readiness check.")
-        else:
-            self.send_response(503)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'Server Initializing')
-            logging.info(
-                "Responded 503 Service Unavailable to readiness check (server not ready).")
-        return
-
-    def do_POST(self):
-        if not server_ready:
-            logging.warning(
-                "Received POST request before server was fully ready. Sending 503.")
-            self.send_response(503)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'Server initializing, please retry.')
-            return
-        
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        post_data_string = post_data.decode('utf-8')
-        logging.info(f"post_data_string: {post_data_string}")
-        try:
-            sliced = split_arguments(post_data_string)
-            in_file_path = Path(sliced[0])
-            out_file_path = Path(sliced[1])
-            note_info_for_log = f"'{in_file_path.stem}' -> '{out_file_path.name}'"
-            logging.info(f"Processing {note_info_for_log} begins...")
-
-            # === Execute Resampler within try...except ===
-            Resampler(*sliced)
-            # If Resampler completes without exception, it's considered successful *by the server*
-            logging.info(f"Processing {note_info_for_log} successful.")
-            self.send_response(200)  # Send 200 OK
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(f"Success: {note_info_for_log}".encode('utf-8'))
-
-        except FileNotFoundError:
-            error_msg = f"Error processing {note_info_for_log}: Input file not found."
-            logging.error(error_msg, exc_info=True)  # Log full traceback
-            self.send_response(404)  # Not Found
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(
-                f"{error_msg}\n{traceback.format_exc()}".encode('utf-8'))
-
-        except Exception:
-            # Catch any other exception during Resampler execution
-            error_msg = f"[Error processing {note_info_for_log}: An internal error occurred."
-            # Log the full traceback for debugging
-            logging.error(error_msg, exc_info=True)
-            self.send_response(500)  # Internal Server Error
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            # Send error details back (optional, consider security if sensitive info might leak)
-            self.wfile.write(
-                f"{error_msg}\n{traceback.format_exc()}".encode('utf-8'))
-
-        '''
-        except Exception as e:
-            trcbk = traceback.format_exc()
-            self.send_response(500)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(f"An error occurred.\n{trcbk}".encode('utf-8'))
-        self.send_response(200)
-        self.end_headers()
-        '''
-
-
-class ThreadPoolHTTPServer(HTTPServer):
-    def __init__(self, server_address, RequestHandlerClass, max_workers):
-        super().__init__(server_address, RequestHandlerClass)
-        self.executor = ThreadPoolExecutor(max_workers=max_workers)
-
-    def process_request(self, request, client_address):
-        self.executor.submit(self.process_request_thread,
-                             request, client_address)
-
-    def process_request_thread(self, request, client_address):
-        try:
-            self.finish_request(request, client_address)
-        except Exception:
-            self.handle_error(request, client_address)
-        finally:
-            self.shutdown_request(request)
-
-
-def run(server_class=ThreadPoolHTTPServer, handler_class=RequestHandler, port=8572, max_workers=1):
+async def handle_post(request: web.Request):
     global server_ready
 
-    server_address = ('', port)
-    httpd = server_class(server_address, handler_class, max_workers=max_workers)
+    if not server_ready:
+        logging.warning("POST arrived but server not ready.")
+        return web.Response(text='Server initializing, please retry.',
+                            status=503)
 
-    logging.info(f'Listening on port {server_address[1]} with {max_workers} worker threads...')
+    post_data_string = await request.text()
+    logging.info(f"post_data_string: {post_data_string}")
+
+    try:
+        sliced = split_arguments(post_data_string)
+        in_file_path, out_file_path = Path(sliced[0]), Path(sliced[1])
+        note = f"'{in_file_path.stem}' -> '{out_file_path.name}'"
+        logging.info(f"Queued {note} ...")
+
+        loop = asyncio.get_running_loop()
+        job = partial(Resampler, *sliced)
+        await loop.run_in_executor(infer_executor, job)
+
+        logging.info(f"Processing {note} successful.")
+        return web.Response(text=f"Success: {note}", status=200)
+
+    except FileNotFoundError:
+        err = f"Error processing {note}: Input file not found."
+        logging.error(err, exc_info=True)
+        return web.Response(text=f"{err}\n{traceback.format_exc()}",
+                            status=404)
+
+    except Exception:
+        err = f"Error processing {note}: Internal error."
+        logging.error(err, exc_info=True)
+        return web.Response(text=f"{err}\n{traceback.format_exc()}",
+                            status=500)
+
+def run(port: int = 8572):
+    global server_ready
+    logging.basicConfig(level=logging.INFO,
+                        format="%(asctime)s | %(levelname)s | %(message)s")
+
+    app = web.Application()
+    app.add_routes([web.get('/', handle_get),
+                    web.post('/', handle_post)])
+
     server_ready = True
-    httpd.serve_forever()
+    logging.info(f'Listening on {port}; aiohttp + inference-thread={CONFIG.max_workers}')
+    web.run_app(app, port=port, access_log=None)   # 生产环境用 gunicorn -k aiohttp.worker.GunicornWebWorker ...
+
+if __name__ == '__main__':
+    run()
