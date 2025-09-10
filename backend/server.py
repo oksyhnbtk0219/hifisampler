@@ -9,7 +9,6 @@ from backend.resampler import Resampler
 from config import CONFIG
 
 server_ready = False                # /GET 用
-infer_executor = ThreadPoolExecutor(max_workers=CONFIG.max_workers) # 推理任务队列
 
 def split_arguments(input_string: str):
     otherargs = input_string.split(' ')[-11:]
@@ -48,19 +47,21 @@ async def handle_post(request: web.Request):
         return web.Response(text=f"Success: {note}", status=200)
 
     except FileNotFoundError:
-        err = f"Error processing {note}: Input file not found."
+        err = "Error processing: Input file not found."
         logging.error(err, exc_info=True)
         return web.Response(text=f"{err}\n{traceback.format_exc()}",
                             status=404)
 
     except Exception:
-        err = f"Error processing {note}: Internal error."
+        err = "Error processing: Internal error."
         logging.error(err, exc_info=True)
         return web.Response(text=f"{err}\n{traceback.format_exc()}",
                             status=500)
 
 def run(port: int = 8572):
-    global server_ready
+    global server_ready, infer_executor
+    infer_executor = ThreadPoolExecutor(max_workers=CONFIG.max_workers) # 推理任务队列
+
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s | %(levelname)s | %(message)s")
 

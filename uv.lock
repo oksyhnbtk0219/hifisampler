@@ -236,7 +236,7 @@ dependencies = [
     { name = "filelock" },
     { name = "librosa" },
     { name = "numpy" },
-    { name = "onnxruntime" },
+    { name = "onnxruntime-directml" },
     { name = "praat-parselmouth" },
     { name = "pyloudnorm" },
     { name = "pyyaml" },
@@ -253,7 +253,7 @@ requires-dist = [
     { name = "filelock", specifier = ">=3.17.0" },
     { name = "librosa", specifier = ">=0.10.2.post1" },
     { name = "numpy", specifier = ">=2.1.3" },
-    { name = "onnxruntime", specifier = ">=1.22.1" },
+    { name = "onnxruntime-directml", specifier = ">=1.22.0" },
     { name = "praat-parselmouth", specifier = ">=0.4.5" },
     { name = "pyloudnorm", specifier = ">=0.1.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
@@ -605,8 +605,8 @@ wheels = [
 ]
 
 [[package]]
-name = "onnxruntime"
-version = "1.22.1"
+name = "onnxruntime-directml"
+version = "1.22.0"
 source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
 dependencies = [
     { name = "coloredlogs" },
@@ -617,10 +617,7 @@ dependencies = [
     { name = "sympy" },
 ]
 wheels = [
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/76/b9/664a1ffee62fa51529fac27b37409d5d28cadee8d97db806fcba68339b7e/onnxruntime-1.22.1-cp310-cp310-macosx_13_0_universal2.whl", hash = "sha256:80e7f51da1f5201c1379b8d6ef6170505cd800e40da216290f5e06be01aadf95", size = 34319864, upload-time = "2025-07-10T19:15:15.371Z" },
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/b9/64/bc7221e92c994931024e22b22401b962c299e991558c3d57f7e34538b4b9/onnxruntime-1.22.1-cp310-cp310-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:b89ddfdbbdaf7e3a59515dee657f6515601d55cb21a0f0f48c81aefc54ff1b73", size = 14472246, upload-time = "2025-07-10T19:15:19.403Z" },
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/84/57/901eddbfb59ac4d008822b236450d5765cafcd450c787019416f8d3baf11/onnxruntime-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:bddc75868bcf6f9ed76858a632f65f7b1846bdcefc6d637b1e359c2c68609964", size = 16459905, upload-time = "2025-07-10T19:15:21.749Z" },
-    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/de/90/d6a1eb9b47e66a18afe7d1cf7cf0b2ef966ffa6f44d9f32d94c2be2860fb/onnxruntime-1.22.1-cp310-cp310-win_amd64.whl", hash = "sha256:01e2f21b2793eb0c8642d2be3cee34cc7d96b85f45f6615e4e220424158877ce", size = 12689001, upload-time = "2025-07-10T19:15:23.848Z" },
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/a4/71/2d02cca14f1303616b0cf7ff0cf65f70fe2f4c46792db6af35f7f240a777/onnxruntime_directml-1.22.0-cp310-cp310-win_amd64.whl", hash = "sha256:1eddf2d05b6f28efa529e704c6cf515331df8ee84fd293e055e4a9a99a3ab51d", size = 24430353, upload-time = "2025-05-09T19:31:25.229Z" },
 ]
 
 [[package]]
