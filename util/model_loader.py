@@ -2,6 +2,8 @@ import logging
 from pathlib import Path
 import torch
 
+from config import CONFIG
+
 
 def get_onnx_providers():
     """Get optimal ONNX providers in priority order"""
@@ -90,10 +92,9 @@ def resolve_model_path(configured_path, default_paths):
 class HifiGANLoader:
     """HifiGAN model loader"""
     
-    def __init__(self, model_path, device, config):
+    def __init__(self, model_path, device):
         self.model_path = model_path
         self.device = device
-        self.config = config
     
     def get_default_paths(self):
         return [
@@ -139,9 +140,9 @@ class HifiGANLoader:
         logging.info(f'Loaded HifiGAN (ONNX): {actual_path} using provider {used_provider}')
         logging.info(f'Graph optimization level: {session_options.graph_optimization_level}')
         
-        if used_provider == 'DmlExecutionProvider' and self.config.max_workers != 1:
+        if used_provider == 'DmlExecutionProvider' and CONFIG.max_workers != 1:
             logging.info('DirectML detected: forcing max_workers=1 to avoid DML multi-thread bug.')
-            self.config.max_workers = 1
+            CONFIG.max_workers = 1
         else:
             logging.info('ONNX Runtime configured for optimized CPU inference with memory reuse enabled.')
             
@@ -151,10 +152,9 @@ class HifiGANLoader:
 class HNSEPLoader:
     """HN-SEP model loader"""
     
-    def __init__(self, model_path, device, config):
+    def __init__(self, model_path, device):
         self.model_path = model_path
         self.device = device
-        self.config = config
     
     def get_model_config(self, model_path):
         import yaml
