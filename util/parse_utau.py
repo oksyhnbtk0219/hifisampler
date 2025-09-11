@@ -103,10 +103,7 @@ def pitch_string_to_cents(x):
             # Decode last pitch string without RLE if it exists
             res.extend(to_int12_stream(p[0]))
     res = np.array(res, dtype=np.int32)
-    if np.all(res == res[0]):
-        return np.zeros(res.shape)
-    else:
-        return np.concatenate([res, np.zeros(1)])
+    return np.concatenate([res, np.zeros(1)])
 
 # Pitch conversion
 
