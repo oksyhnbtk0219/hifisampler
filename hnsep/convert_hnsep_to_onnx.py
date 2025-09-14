@@ -11,6 +11,8 @@ from pathlib import Path
 import logging
 from hnsep.nets import CascadedNet
 from util.audio import DotDict
+import onnx
+import onnxslim
 
 logging.basicConfig(format='%(message)s', level=logging.INFO)
 
@@ -160,6 +162,15 @@ def convert_to_onnx(model_path, output_path=None, device=torch.device('cpu')):
         )
         
         logging.info(f"Successfully converted to ONNX: {output_path}")
+        
+        # simplify ONNX model by onnxslim
+        try:
+            logging.info(f"Running OnnxSlim on: {output_path}")
+            model_onnx = onnxslim.slim(output_path)
+            onnx.save(model_onnx, output_path)
+        
+        except Exception as e:
+            logging.warning(f"Running OnnxSlim failed: {e}")
         
         # Verify the ONNX model
         try:
