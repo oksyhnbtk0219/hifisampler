@@ -3,6 +3,7 @@ import logging
 from config import CONFIG
 from util.wav2mel import PitchAdjustableMelSpectrogram
 from util.model_loader import HifiGANLoader, HNSEPLoader
+from .whisperize_hifisampler import whisperize_wave
 
 vocoder = None
 ort_session = None
@@ -26,6 +27,10 @@ def initialize_models():
     if vocoder_type == 'onnx':
         ort_session = model_or_session
         CONFIG.model_type = 'onnx'
+    if args.whisper:
+    y = whisperize_wave(y, sr, n_fft=2048, hop_length=256,
+                        noise='white', hybrid=True,
+                        whisper_strength=1.0, preserve_harmonics=0.01)
     else:
         vocoder = model_or_session
     
