@@ -26,3 +26,6 @@ if __name__ == '__main__':
         logging.error(
             f"Failed to initialize or start the server: {e}", exc_info=True)
         sys.exit(1)
+parser.add_argument('--whisper', action='store_true', help='enable constant whisper processing')
+parser.add_argument('--whisper-preserve-harmonics', type=float, default=0.01)
+
